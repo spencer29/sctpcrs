@@ -19,6 +19,7 @@ import {
   Bell,
   LogOut,
   HelpCircle,
+  ClipboardList,
 } from 'lucide-react';
 
 interface NavItem {
@@ -55,6 +56,15 @@ const navItems: NavItem[] = [
     icon: <GitBranch size={18} />,
     badge: 2,
     badgeSeverity: 'critical',
+    group: 'core',
+  },
+  {
+    id: 'nav-assessments',
+    label: 'Assessments',
+    href: '/assessments',
+    icon: <ClipboardList size={18} />,
+    badge: 2,
+    badgeSeverity: 'high',
     group: 'core',
   },
   {
