@@ -6,6 +6,9 @@ import IncidentTimeline, { INCIDENTS } from './components/IncidentTimeline';
 import ImpactAssessmentPanel from './components/ImpactAssessmentPanel';
 import RemediationTasksPanel from './components/RemediationTasksPanel';
 import EscalationWorkflowPanel from './components/EscalationWorkflowPanel';
+import BulkAlertActions from './components/BulkAlertActions';
+import AuditTrailPanel from './components/AuditTrailPanel';
+import { AuditEntry } from './components/BulkAlertActions';
 import {
   AlertTriangle,
   ShieldAlert,
@@ -15,9 +18,11 @@ import {
   Filter,
   Plus,
   ChevronRight,
+  Layers,
 } from 'lucide-react';
 
 type RightPanel = 'timeline' | 'impact' | 'remediation' | 'escalation';
+type MainTab = 'incidents' | 'bulk-alerts';
 
 const severityConfig = {
   critical: { cls: 'bg-status-critical/10 text-status-critical border-status-critical/30', dot: 'bg-status-critical alert-pulse' },
@@ -38,6 +43,12 @@ export default function IncidentsPage() {
   const [activePanel, setActivePanel] = useState<RightPanel>('timeline');
   const [search, setSearch] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
+  const [mainTab, setMainTab] = useState<MainTab>('incidents');
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
+
+  const handleAuditEntry = (entry: AuditEntry) => {
+    setAuditEntries((prev) => [entry, ...prev]);
+  };
 
   const kpis = [
     { label: 'Open Incidents', value: INCIDENTS.filter((i) => i.status === 'open').length.toString(), sub: 'require triage', cls: 'text-status-critical', borderCls: 'border-status-critical/30', icon: <AlertTriangle size={16} className="text-status-critical" /> },
@@ -105,124 +116,167 @@ export default function IncidentsPage() {
           ))}
         </div>
 
-        {/* Main content: incident list + detail panel */}
-        <div className="grid grid-cols-5 gap-4">
-          {/* Left: Incident list */}
-          <div className="col-span-2 space-y-3">
-            {/* Search + filter */}
-            <div className="flex items-center gap-2">
-              <div className="flex-1 relative">
-                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search incidents..."
-                  className="w-full bg-card border border-border rounded-lg pl-8 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
-                />
+        {/* Main tabs */}
+        <div className="flex items-center gap-1 border-b border-border">
+          <button
+            onClick={() => setMainTab('incidents')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-all duration-150 -mb-px ${
+              mainTab === 'incidents' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <ShieldAlert size={13} />
+            Incident Management
+          </button>
+          <button
+            onClick={() => setMainTab('bulk-alerts')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-all duration-150 -mb-px ${
+              mainTab === 'bulk-alerts' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Layers size={13} />
+            Bulk Alert Actions
+            {auditEntries.length > 0 && (
+              <span className="text-2xs font-mono-data font-semibold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                {auditEntries.length} new
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Incident Management tab */}
+        {mainTab === 'incidents' && (
+          <div className="grid grid-cols-5 gap-4">
+            {/* Left: Incident list */}
+            <div className="col-span-2 space-y-3">
+              {/* Search + filter */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1 relative">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search incidents..."
+                    className="w-full bg-card border border-border rounded-lg pl-8 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+                  />
+                </div>
+                <div className="relative">
+                  <Filter size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <select
+                    value={severityFilter}
+                    onChange={(e) => setSeverityFilter(e.target.value)}
+                    className="bg-card border border-border rounded-lg pl-8 pr-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary/50 appearance-none"
+                  >
+                    <option value="all">All Severity</option>
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
               </div>
-              <div className="relative">
-                <Filter size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <select
-                  value={severityFilter}
-                  onChange={(e) => setSeverityFilter(e.target.value)}
-                  className="bg-card border border-border rounded-lg pl-8 pr-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary/50 appearance-none"
-                >
-                  <option value="all">All Severity</option>
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                </select>
+
+              {/* Incident cards */}
+              <div className="space-y-2">
+                {filteredIncidents.map((inc) => {
+                  const sev = severityConfig[inc.severity];
+                  const stat = statusConfig[inc.status];
+                  const isSelected = selectedId === inc.id;
+                  return (
+                    <div
+                      key={inc.id}
+                      onClick={() => setSelectedId(inc.id)}
+                      className={`bg-card border rounded-xl p-4 cursor-pointer transition-all duration-150 ${
+                        isSelected ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-border/80 hover:bg-muted/20'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2 min-w-0">
+                          <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${sev.dot}`} />
+                          <div className="min-w-0">
+                            <p className="text-xs font-mono-data text-muted-foreground">{inc.id}</p>
+                            <p className="text-xs font-semibold text-foreground mt-0.5 leading-snug line-clamp-2">{inc.title}</p>
+                          </div>
+                        </div>
+                        <ChevronRight size={13} className={`flex-shrink-0 mt-1 transition-colors ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
+                      </div>
+                      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                        <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded-full border ${sev.cls}`}>
+                          {inc.severity.toUpperCase()}
+                        </span>
+                        <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded-full border ${stat.cls}`}>
+                          {stat.label}
+                        </span>
+                        <span className="text-2xs text-muted-foreground">{inc.vendor}</span>
+                      </div>
+                      <p className="text-2xs text-muted-foreground mt-1.5 flex items-center gap-1">
+                        <Clock size={10} /> {inc.detectedAt}
+                      </p>
+                    </div>
+                  );
+                })}
+                {filteredIncidents.length === 0 && (
+                  <div className="bg-card border border-border rounded-xl p-8 text-center">
+                    <p className="text-xs text-muted-foreground">No incidents match your filters</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Incident cards */}
-            <div className="space-y-2">
-              {filteredIncidents.map((inc) => {
-                const sev = severityConfig[inc.severity];
-                const stat = statusConfig[inc.status];
-                const isSelected = selectedId === inc.id;
-                return (
-                  <div
-                    key={inc.id}
-                    onClick={() => setSelectedId(inc.id)}
-                    className={`bg-card border rounded-xl p-4 cursor-pointer transition-all duration-150 ${
-                      isSelected ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-border/80 hover:bg-muted/20'
+            {/* Right: Detail panels */}
+            <div className="col-span-3 space-y-3">
+              {/* Selected incident header */}
+              <div className="bg-card border border-border rounded-xl px-4 py-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-mono-data text-muted-foreground">{selectedIncident.id}</span>
+                  <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full border ${severityConfig[selectedIncident.severity].cls}`}>
+                    {selectedIncident.severity.toUpperCase()}
+                  </span>
+                  <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full border ${statusConfig[selectedIncident.status].cls}`}>
+                    {statusConfig[selectedIncident.status].label}
+                  </span>
+                </div>
+                <p className="text-sm font-semibold text-foreground mt-1">{selectedIncident.title}</p>
+              </div>
+
+              {/* Panel tabs */}
+              <div className="flex items-center gap-1 border-b border-border">
+                {panels.map((panel) => (
+                  <button
+                    key={panel.id}
+                    onClick={() => setActivePanel(panel.id)}
+                    className={`px-4 py-2.5 text-xs font-medium border-b-2 transition-all duration-150 -mb-px ${
+                      activePanel === panel.id
+                        ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2 min-w-0">
-                        <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${sev.dot}`} />
-                        <div className="min-w-0">
-                          <p className="text-xs font-mono-data text-muted-foreground">{inc.id}</p>
-                          <p className="text-xs font-semibold text-foreground mt-0.5 leading-snug line-clamp-2">{inc.title}</p>
-                        </div>
-                      </div>
-                      <ChevronRight size={13} className={`flex-shrink-0 mt-1 transition-colors ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
-                    </div>
-                    <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-                      <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded-full border ${sev.cls}`}>
-                        {inc.severity.toUpperCase()}
-                      </span>
-                      <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded-full border ${stat.cls}`}>
-                        {stat.label}
-                      </span>
-                      <span className="text-2xs text-muted-foreground">{inc.vendor}</span>
-                    </div>
-                    <p className="text-2xs text-muted-foreground mt-1.5 flex items-center gap-1">
-                      <Clock size={10} /> {inc.detectedAt}
-                    </p>
-                  </div>
-                );
-              })}
-              {filteredIncidents.length === 0 && (
-                <div className="bg-card border border-border rounded-xl p-8 text-center">
-                  <p className="text-xs text-muted-foreground">No incidents match your filters</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right: Detail panels */}
-          <div className="col-span-3 space-y-3">
-            {/* Selected incident header */}
-            <div className="bg-card border border-border rounded-xl px-4 py-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-mono-data text-muted-foreground">{selectedIncident.id}</span>
-                <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full border ${severityConfig[selectedIncident.severity].cls}`}>
-                  {selectedIncident.severity.toUpperCase()}
-                </span>
-                <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full border ${statusConfig[selectedIncident.status].cls}`}>
-                  {statusConfig[selectedIncident.status].label}
-                </span>
+                    {panel.label}
+                  </button>
+                ))}
               </div>
-              <p className="text-sm font-semibold text-foreground mt-1">{selectedIncident.title}</p>
-            </div>
 
-            {/* Panel tabs */}
-            <div className="flex items-center gap-1 border-b border-border">
-              {panels.map((panel) => (
-                <button
-                  key={panel.id}
-                  onClick={() => setActivePanel(panel.id)}
-                  className={`px-4 py-2.5 text-xs font-medium border-b-2 transition-all duration-150 -mb-px ${
-                    activePanel === panel.id
-                      ? 'border-primary text-primary' :'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {panel.label}
-                </button>
-              ))}
+              {/* Panel content */}
+              {activePanel === 'timeline' && <IncidentTimeline selectedId={selectedId} />}
+              {activePanel === 'impact' && <ImpactAssessmentPanel selectedId={selectedId} />}
+              {activePanel === 'remediation' && <RemediationTasksPanel selectedId={selectedId} />}
+              {activePanel === 'escalation' && <EscalationWorkflowPanel selectedId={selectedId} />}
             </div>
-
-            {/* Panel content */}
-            {activePanel === 'timeline' && <IncidentTimeline selectedId={selectedId} />}
-            {activePanel === 'impact' && <ImpactAssessmentPanel selectedId={selectedId} />}
-            {activePanel === 'remediation' && <RemediationTasksPanel selectedId={selectedId} />}
-            {activePanel === 'escalation' && <EscalationWorkflowPanel selectedId={selectedId} />}
           </div>
-        </div>
+        )}
+
+        {/* Bulk Alert Actions tab */}
+        {mainTab === 'bulk-alerts' && (
+          <div className="grid grid-cols-5 gap-4">
+            {/* Left: Bulk alert selector */}
+            <div className="col-span-3">
+              <BulkAlertActions onAuditEntry={handleAuditEntry} />
+            </div>
+            {/* Right: Audit trail */}
+            <div className="col-span-2">
+              <AuditTrailPanel entries={auditEntries} />
+            </div>
+          </div>
+        )}
       </div>
     </AppLayout>
   );
