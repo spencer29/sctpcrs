@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { TrendingUp, TrendingDown, Minus, Eye, FileSearch, PauseCircle, MoreHorizontal, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown, CheckSquare, Square, Send, Download,  } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Eye, FileSearch, PauseCircle, MoreHorizontal, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown, CheckSquare, Square, Send, Download, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import VendorDetailModal from './VendorDetailModal';
+import VendorRiskWorkflowModal from './VendorRiskWorkflowModal';
 
 // Backend integration point: GET /api/v1/vendors?page=1&size=12&sort=vrs_desc
 const vendorData = [
@@ -294,6 +295,7 @@ export default function VendorDataTable() {
   const [pageSize, setPageSize] = useState(12);
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
   const [detailVendor, setDetailVendor] = useState<typeof vendorData[0] | null>(null);
+  const [riskWorkflowVendor, setRiskWorkflowVendor] = useState<typeof vendorData[0] | null>(null);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -393,6 +395,9 @@ export default function VendorDataTable() {
     <div className="space-y-3">
       {/* Vendor Detail Modal */}
       <VendorDetailModal vendor={detailVendor} onClose={() => setDetailVendor(null)} />
+
+      {/* Risk Officer Workflow Modal */}
+      <VendorRiskWorkflowModal vendor={riskWorkflowVendor} onClose={() => setRiskWorkflowVendor(null)} />
 
       {/* Bulk action bar */}
       {selected.size > 0 && (
@@ -612,9 +617,9 @@ export default function VendorDataTable() {
                           <Eye size={13} />
                         </button>
                         <button
-                          title="Initiate risk assessment"
-                          className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-status-info hover:bg-status-info/10 transition-all duration-150"
-                          onClick={() => toast.success(`Assessment initiated for ${vendor.legalName}`)}
+                          title="Assess vendor risk"
+                          className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-status-high hover:bg-status-high/10 transition-all duration-150"
+                          onClick={(e) => { e.stopPropagation(); setRiskWorkflowVendor(vendor); }}
                         >
                           <FileSearch size={13} />
                         </button>
@@ -637,13 +642,14 @@ export default function VendorDataTable() {
                             <div className="absolute right-0 top-full mt-1 w-44 bg-card border border-border rounded-lg shadow-xl z-20 py-1 fade-in">
                               {[
                                 { label: 'View Timeline', icon: <Eye size={12} /> },
+                                { label: 'Assess Vendor Risk', icon: <ShieldAlert size={12} />, action: () => { setRiskWorkflowVendor(vendor); setActionMenuOpen(null); } },
                                 { label: 'Upload Document', icon: <Download size={12} /> },
                                 { label: 'Trigger Re-Score', icon: <FileSearch size={12} /> },
                                 { label: 'Initiate Offboarding', icon: <PauseCircle size={12} />, danger: true },
                               ].map((action) => (
                                 <button
                                   key={`menu-${vendor.id}-${action.label}`}
-                                  onClick={() => { toast.success(`${action.label}: ${vendor.legalName}`); setActionMenuOpen(null); }}
+                                  onClick={() => { if (action.action) { action.action(); } else { toast.success(`${action.label}: ${vendor.legalName}`); setActionMenuOpen(null); } }}
                                   className={`flex items-center gap-2 w-full px-3 py-2 text-xs transition-colors hover:bg-muted ${
                                     action.danger ? 'text-status-critical' : 'text-foreground'
                                   }`}
