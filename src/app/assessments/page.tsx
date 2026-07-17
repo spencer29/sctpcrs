@@ -5,6 +5,9 @@ import AppLayout from '@/components/AppLayout';
 import AssessmentInitiateModal, { InitiateFormData } from './components/AssessmentInitiateModal';
 import QuestionnaireTracker from './components/QuestionnaireTracker';
 import ControlFindingsPanel from './components/ControlFindingsPanel';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRoleFilter, filterByAssignee } from '@/lib/rbac/useRoleFilter';
+import { PermissionGate } from '@/components/rbac/PermissionGate';
 import {
   ClipboardList,
   Plus,
@@ -17,6 +20,7 @@ import {
   User,
   Building2,
   ShieldAlert,
+  ShieldOff,
 } from 'lucide-react';
 
 interface Assessment {
@@ -68,6 +72,16 @@ export default function AssessmentsPage() {
   const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
   const [assessments, setAssessments] = useState<Assessment[]>(MOCK_ASSESSMENTS);
 
+  const { profile } = useAuth();
+  const roleFilter = useRoleFilter();
+
+  // Scope assessments to assigned ones for Auditor/Vendor Manager personas
+  const scopedAssessments = filterByAssignee(
+    assessments,
+    roleFilter.assessmentScope,
+    profile?.full_name
+  );
+
   const handleInitiate = (data: InitiateFormData) => {
     const newId = `ASM-2026-${String(assessments.length + 1).padStart(3, '0')}`;
     const newAssessment: Assessment = {
@@ -89,10 +103,10 @@ export default function AssessmentsPage() {
     setShowInitiateModal(false);
   };
 
-  const inProgress = assessments.filter((a) => a.status === 'IN_PROGRESS').length;
-  const overdue = assessments.filter((a) => a.status === 'OVERDUE').length;
-  const completed = assessments.filter((a) => a.status === 'COMPLETED').length;
-  const criticalFindings = assessments.reduce((a, c) => a + c.findingsCritical, 0);
+  const inProgress = scopedAssessments.filter((a) => a.status === 'IN_PROGRESS').length;
+  const overdue = scopedAssessments.filter((a) => a.status === 'OVERDUE').length;
+  const completed = scopedAssessments.filter((a) => a.status === 'COMPLETED').length;
+  const criticalFindings = scopedAssessments.reduce((a, c) => a + c.findingsCritical, 0);
 
   const tabs: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     { id: 'timeline', label: 'Assessment Timeline', icon: <Calendar size={14} /> },
@@ -108,19 +122,26 @@ export default function AssessmentsPage() {
           <div>
             <h1 className="text-2xl font-semibold text-foreground tracking-tight">Vendor Risk Assessments</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {assessments.length} assessments ·{' '}
+              {scopedAssessments.length} assessments ·{' '}
               <span className="text-status-info font-mono-data">{inProgress} IN PROGRESS</span> ·{' '}
               <span className="text-status-critical font-mono-data">{overdue} OVERDUE</span> ·{' '}
               <span className="text-status-low font-mono-data">{completed} COMPLETED</span>
+              {roleFilter.assessmentScope === 'assigned' && (
+                <span className="ml-2 text-2xs px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-medium">
+                  Scoped to your assignments
+                </span>
+              )}
             </p>
           </div>
-          <button
-            onClick={() => setShowInitiateModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all duration-150 active:scale-95"
-          >
-            <Plus size={14} />
-            Initiate Assessment
-          </button>
+          <PermissionGate resource="assessments" action="create" silent>
+            <button
+              onClick={() => setShowInitiateModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all duration-150 active:scale-95"
+            >
+              <Plus size={14} />
+              Initiate Assessment
+            </button>
+          </PermissionGate>
         </div>
 
         {/* KPI cards */}
@@ -173,7 +194,7 @@ export default function AssessmentsPage() {
               <span className="col-span-1">Assignee</span>
             </div>
 
-            {assessments.map((a) => {
+            {scopedAssessments.map((a) => {
               const sc = statusConfig[a.status];
               return (
                 <div
@@ -223,6 +244,14 @@ export default function AssessmentsPage() {
                 </div>
               );
             })}
+
+            {scopedAssessments.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <ShieldOff size={36} className="text-muted-foreground" />
+                <p className="text-sm font-medium text-foreground">No assessments in your scope</p>
+                <p className="text-xs text-muted-foreground">Assessments assigned to you will appear here.</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -232,7 +261,7 @@ export default function AssessmentsPage() {
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <span className="text-xs text-muted-foreground">Viewing questionnaire for:</span>
               <div className="flex gap-2 flex-wrap">
-                {assessments.filter((a) => a.status !== 'CANCELLED').map((a) => (
+                {scopedAssessments.filter((a) => a.status !== 'CANCELLED').map((a) => (
                   <button
                     key={a.id}
                     onClick={() => setSelectedAssessment(a)}
@@ -247,7 +276,7 @@ export default function AssessmentsPage() {
               </div>
             </div>
             <QuestionnaireTracker
-              assessmentId={selectedAssessment?.id ?? assessments[0].id}
+              assessmentId={selectedAssessment?.id ?? (scopedAssessments[0]?.id ?? assessments[0].id)}
               vendorName={selectedAssessment?.vendorName ?? assessments[0].vendorName}
             />
           </div>

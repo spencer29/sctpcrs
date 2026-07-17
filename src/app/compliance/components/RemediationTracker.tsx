@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { AlertTriangle, Clock, CheckCircle2, ChevronDown, ChevronRight, Building2, Calendar, User, ArrowRight } from 'lucide-react';
+import { AlertTriangle, Clock, CheckCircle2, ChevronDown, ChevronRight, Building2, Calendar, User, ArrowRight, ShieldCheck } from 'lucide-react';
 
 interface RemediationItem {
   id: string;
@@ -50,7 +50,11 @@ const progressColor = (p: number) => {
   return 'bg-status-critical';
 };
 
-export default function RemediationTracker() {
+interface RemediationTrackerProps {
+  canClose?: boolean;
+}
+
+export default function RemediationTracker({ canClose = false }: RemediationTrackerProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -168,6 +172,23 @@ export default function RemediationTracker() {
                       <span>Due: <span className={`font-mono-data ${item.daysOverdue ? 'text-status-critical' : 'text-foreground'}`}>{item.dueDate}</span></span>
                       <span>Owner: <span className="text-foreground">{item.owner}</span></span>
                     </div>
+                    {/* Close/Approve remediation — restricted to Risk Officer / Admin */}
+                    {canClose && item.status !== 'CLOSED' && (
+                      <div className="mt-3 flex items-center gap-2">
+                        {item.status === 'PENDING_REVIEW' && (
+                          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-status-low/10 border border-status-low/30 text-xs font-semibold text-status-low hover:bg-status-low/20 transition-colors">
+                            <ShieldCheck size={12} />
+                            Approve &amp; Close
+                          </button>
+                        )}
+                        {item.status !== 'PENDING_REVIEW' && (
+                          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-muted border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                            <ArrowRight size={12} />
+                            Mark Pending Review
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

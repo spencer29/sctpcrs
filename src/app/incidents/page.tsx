@@ -11,6 +11,7 @@ import AuditTrailPanel from './components/AuditTrailPanel';
 import { AuditEntry } from './components/BulkAlertActions';
 import ProactiveRiskForecast from './components/ProactiveRiskForecast';
 import { PermissionGate } from '@/components/rbac/PermissionGate';
+import { useRoleFilter } from '@/lib/rbac/useRoleFilter';
 import {
   useRealtimeIncidents,
   useRealtimeAlerts,
@@ -64,6 +65,8 @@ export default function IncidentsPage() {
   const [mainTab, setMainTab] = useState<MainTab>('incidents');
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
 
+  const roleFilter = useRoleFilter();
+
   // ── Real-time subscriptions ──────────────────────────────────────────────
   const {
     incidents: liveIncidents,
@@ -88,7 +91,7 @@ export default function IncidentsPage() {
   const isLive = liveIncidents.length > 0;
 
   // ── Derive incident list (live or static fallback) ───────────────────────
-  const displayIncidents =
+  const allDisplayIncidents =
     liveIncidents.length > 0
       ? liveIncidents.map((inc) => ({
           id: inc.id,
@@ -100,6 +103,18 @@ export default function IncidentsPage() {
           assignee: inc.assignee,
         }))
       : INCIDENTS;
+
+  // Scope incidents: Vendor Manager sees only their assigned incidents
+  const displayIncidents =
+    roleFilter.incidentScope === 'none'
+      ? []
+      : roleFilter.incidentScope === 'assigned'
+      ? allDisplayIncidents.filter(
+          (i) =>
+            !i.assignee ||
+            i.assignee.toLowerCase().includes((roleFilter.role ?? '').toLowerCase())
+        )
+      : allDisplayIncidents;
 
   const handleAuditEntry = (entry: AuditEntry) => {
     setAuditEntries((prev) => [entry, ...prev]);
@@ -136,11 +151,12 @@ export default function IncidentsPage() {
     },
   ];
 
+  // Restrict panel tabs: Escalation Workflow only for roles that can escalate
   const panels: { id: RightPanel; label: string }[] = [
     { id: 'timeline', label: 'Timeline' },
     { id: 'impact', label: 'Impact Assessment' },
     { id: 'remediation', label: 'Remediation Tasks' },
-    { id: 'escalation', label: 'Escalation Workflow' },
+    ...(roleFilter.canEscalate ? [{ id: 'escalation' as RightPanel, label: 'Escalation Workflow' }] : []),
   ];
 
   const filteredIncidents = displayIncidents.filter((inc) => {
@@ -176,6 +192,11 @@ export default function IncidentsPage() {
                 <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-status-low/10 border border-status-low/30">
                   <span className="w-1.5 h-1.5 rounded-full bg-status-low animate-pulse" />
                   <span className="text-2xs font-semibold text-status-low">LIVE</span>
+                </span>
+              )}
+              {roleFilter.incidentScope === 'assigned' && (
+                <span className="text-2xs px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-medium">
+                  Scoped to your assignments
                 </span>
               )}
             </div>
@@ -224,20 +245,23 @@ export default function IncidentsPage() {
             <ShieldAlert size={13} />
             Incident Management
           </button>
-          <button
-            onClick={() => setMainTab('bulk-alerts')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-all duration-150 -mb-px ${
-              mainTab === 'bulk-alerts' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Layers size={13} />
-            Bulk Alert Actions
-            {auditEntries.length > 0 && (
-              <span className="text-2xs font-mono-data font-semibold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                {auditEntries.length} new
-              </span>
-            )}
-          </button>
+          {/* Bulk Alert Actions — restricted to roles that can edit alerts */}
+          <PermissionGate resource="alerts" action="edit" silent>
+            <button
+              onClick={() => setMainTab('bulk-alerts')}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-all duration-150 -mb-px ${
+                mainTab === 'bulk-alerts' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Layers size={13} />
+              Bulk Alert Actions
+              {auditEntries.length > 0 && (
+                <span className="text-2xs font-mono-data font-semibold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  {auditEntries.length} new
+                </span>
+              )}
+            </button>
+          </PermissionGate>
           <button
             onClick={() => setMainTab('risk-forecast')}
             className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-all duration-150 -mb-px ${
@@ -301,100 +325,115 @@ export default function IncidentsPage() {
                 </div>
               )}
 
-              {/* Incident cards */}
-              <div className="space-y-2">
-                {filteredIncidents.map((inc) => {
-                  const sev = severityConfig[inc.severity];
-                  const stat = statusConfig[inc.status];
-                  const isSelected = selectedId === inc.id;
-                  return (
-                    <div
-                      key={inc.id}
-                      onClick={() => setSelectedId(inc.id)}
-                      className={`bg-card border rounded-xl p-4 cursor-pointer transition-all duration-150 ${
-                        isSelected ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-border/80 hover:bg-muted/20'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-start gap-2 min-w-0">
-                          <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${sev.dot}`} />
-                          <div className="min-w-0">
-                            <p className="text-xs font-mono-data text-muted-foreground">{inc.id}</p>
-                            <p className="text-xs font-semibold text-foreground mt-0.5 leading-snug line-clamp-2">{inc.title}</p>
-                          </div>
-                        </div>
-                        <ChevronRight size={13} className={`flex-shrink-0 mt-1 transition-colors ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
-                      </div>
-                      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-                        <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded-full border ${sev.cls}`}>
-                          {inc.severity.toUpperCase()}
-                        </span>
-                        <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded-full border ${stat.cls}`}>
-                          {stat.label}
-                        </span>
-                        <span className="text-2xs text-muted-foreground">{inc.vendor}</span>
-                      </div>
-                      <p className="text-2xs text-muted-foreground mt-1.5 flex items-center gap-1">
-                        <Clock size={10} /> {inc.detectedAt}
-                      </p>
-                    </div>
-                  );
-                })}
-                {filteredIncidents.length === 0 && !incLoading && (
-                  <div className="bg-card border border-border rounded-xl p-8 text-center">
-                    <p className="text-xs text-muted-foreground">No incidents match your filters</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Right: Detail panels */}
-            <div className="col-span-3 space-y-3">
-              {/* Selected incident header */}
-              {selectedIncident && (
-                <div className="bg-card border border-border rounded-xl px-4 py-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-mono-data text-muted-foreground">{selectedIncident.id}</span>
-                    <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full border ${severityConfig[selectedIncident.severity].cls}`}>
-                      {selectedIncident.severity.toUpperCase()}
-                    </span>
-                    <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full border ${statusConfig[selectedIncident.status].cls}`}>
-                      {statusConfig[selectedIncident.status].label}
-                    </span>
-                  </div>
-                  <p className="text-sm font-semibold text-foreground mt-1">{selectedIncident.title}</p>
+              {/* No access for Vendor Manager persona */}
+              {roleFilter.incidentScope === 'none' && (
+                <div className="bg-card border border-border rounded-xl p-8 text-center space-y-2">
+                  <ShieldAlert size={28} className="text-muted-foreground mx-auto" />
+                  <p className="text-xs font-medium text-foreground">Incident access not in your scope</p>
+                  <p className="text-2xs text-muted-foreground">Contact your Risk Officer for incident details.</p>
                 </div>
               )}
 
-              {/* Panel tabs */}
-              <div className="flex items-center gap-1 border-b border-border">
-                {panels.map((panel) => (
-                  <button
-                    key={panel.id}
-                    onClick={() => setActivePanel(panel.id)}
-                    className={`px-4 py-2.5 text-xs font-medium border-b-2 transition-all duration-150 -mb-px ${
-                      activePanel === panel.id
-                        ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {panel.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Panel content */}
-              {activePanel === 'timeline' && (
-                <IncidentTimeline
-                  selectedId={selectedId}
-                  liveIncidents={liveIncidents}
-                  liveEvents={liveEvents}
-                  isLive={isLive}
-                />
+              {/* Incident cards */}
+              {roleFilter.incidentScope !== 'none' && (
+                <div className="space-y-2">
+                  {filteredIncidents.map((inc) => {
+                    const sev = severityConfig[inc.severity];
+                    const stat = statusConfig[inc.status];
+                    const isSelected = selectedId === inc.id;
+                    return (
+                      <div
+                        key={inc.id}
+                        onClick={() => setSelectedId(inc.id)}
+                        className={`bg-card border rounded-xl p-4 cursor-pointer transition-all duration-150 ${
+                          isSelected ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-border/80 hover:bg-muted/20'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2 min-w-0">
+                            <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${sev.dot}`} />
+                            <div className="min-w-0">
+                              <p className="text-xs font-mono-data text-muted-foreground">{inc.id}</p>
+                              <p className="text-xs font-semibold text-foreground mt-0.5 leading-snug line-clamp-2">{inc.title}</p>
+                            </div>
+                          </div>
+                          <ChevronRight size={13} className={`flex-shrink-0 mt-1 transition-colors ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
+                        </div>
+                        <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                          <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded-full border ${sev.cls}`}>
+                            {inc.severity.toUpperCase()}
+                          </span>
+                          <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded-full border ${stat.cls}`}>
+                            {stat.label}
+                          </span>
+                          <span className="text-2xs text-muted-foreground">{inc.vendor}</span>
+                        </div>
+                        <p className="text-2xs text-muted-foreground mt-1.5 flex items-center gap-1">
+                          <Clock size={10} /> {inc.detectedAt}
+                        </p>
+                      </div>
+                    );
+                  })}
+                  {filteredIncidents.length === 0 && !incLoading && (
+                    <div className="bg-card border border-border rounded-xl p-8 text-center">
+                      <p className="text-xs text-muted-foreground">No incidents match your filters</p>
+                    </div>
+                  )}
+                </div>
               )}
-              {activePanel === 'impact' && <ImpactAssessmentPanel selectedId={selectedId} />}
-              {activePanel === 'remediation' && <RemediationTasksPanel selectedId={selectedId} />}
-              {activePanel === 'escalation' && <EscalationWorkflowPanel selectedId={selectedId} />}
             </div>
+
+            {/* Right: Detail panels */}
+            {roleFilter.incidentScope !== 'none' && (
+              <div className="col-span-3 space-y-3">
+                {/* Selected incident header */}
+                {selectedIncident && (
+                  <div className="bg-card border border-border rounded-xl px-4 py-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-mono-data text-muted-foreground">{selectedIncident.id}</span>
+                      <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full border ${severityConfig[selectedIncident.severity].cls}`}>
+                        {selectedIncident.severity.toUpperCase()}
+                      </span>
+                      <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full border ${statusConfig[selectedIncident.status].cls}`}>
+                        {statusConfig[selectedIncident.status].label}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground mt-1">{selectedIncident.title}</p>
+                  </div>
+                )}
+
+                {/* Panel tabs */}
+                <div className="flex items-center gap-1 border-b border-border">
+                  {panels.map((panel) => (
+                    <button
+                      key={panel.id}
+                      onClick={() => setActivePanel(panel.id)}
+                      className={`px-4 py-2.5 text-xs font-medium border-b-2 transition-all duration-150 -mb-px ${
+                        activePanel === panel.id
+                          ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {panel.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Panel content */}
+                {activePanel === 'timeline' && (
+                  <IncidentTimeline
+                    selectedId={selectedId}
+                    liveIncidents={liveIncidents}
+                    liveEvents={liveEvents}
+                    isLive={isLive}
+                  />
+                )}
+                {activePanel === 'impact' && <ImpactAssessmentPanel selectedId={selectedId} />}
+                {activePanel === 'remediation' && <RemediationTasksPanel selectedId={selectedId} />}
+                {activePanel === 'escalation' && roleFilter.canEscalate && (
+                  <EscalationWorkflowPanel selectedId={selectedId} />
+                )}
+              </div>
+            )}
           </div>
         )}
 

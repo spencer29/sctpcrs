@@ -5,7 +5,9 @@ import AppLayout from '@/components/AppLayout';
 import FrameworkStatusGrid, { FRAMEWORKS } from './components/FrameworkStatusGrid';
 import AuditSchedulePanel from './components/AuditSchedulePanel';
 import RemediationTracker from './components/RemediationTracker';
-import { ShieldCheck, AlertTriangle, TrendingUp, BarChart3, Calendar, Wrench, ChevronRight,  } from 'lucide-react';
+import { useRoleFilter } from '@/lib/rbac/useRoleFilter';
+
+import { ShieldCheck, AlertTriangle, TrendingUp, BarChart3, Calendar, Wrench, ChevronRight, Plus } from 'lucide-react';
 import { RadialBarChart, RadialBar, ResponsiveContainer, Tooltip } from 'recharts';
 
 type ActiveTab = 'matrix' | 'audits' | 'remediation';
@@ -44,6 +46,8 @@ const scoreBorder = (s: number) => {
 export default function CompliancePage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('matrix');
   const [selectedFramework, setSelectedFramework] = useState<string | null>(null);
+
+  const roleFilter = useRoleFilter();
 
   const totalVendors = 12;
   const compliantVendors = 4;
@@ -86,6 +90,13 @@ export default function CompliancePage() {
                 <AlertTriangle size={13} className="text-status-high" />
                 <span className="text-xs font-semibold text-status-high">{criticalRemediations} Critical Remediations</span>
               </div>
+            )}
+            {/* Schedule Audit — restricted to Risk Officer / Admin */}
+            {roleFilter.canScheduleAudits && (
+              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all duration-150 active:scale-95">
+                <Plus size={13} />
+                Schedule Audit
+              </button>
             )}
           </div>
         </div>
@@ -206,8 +217,12 @@ export default function CompliancePage() {
             onFrameworkSelect={(id) => setSelectedFramework(id === selectedFramework ? null : id)}
           />
         )}
-        {activeTab === 'audits' && <AuditSchedulePanel />}
-        {activeTab === 'remediation' && <RemediationTracker />}
+        {activeTab === 'audits' && (
+          <AuditSchedulePanel canSchedule={roleFilter.canScheduleAudits} />
+        )}
+        {activeTab === 'remediation' && (
+          <RemediationTracker canClose={roleFilter.canCloseRemediations} />
+        )}
       </div>
     </AppLayout>
   );

@@ -135,7 +135,7 @@ export function getAllowedActions(role: AppRole | null | undefined, resource: Re
  * Navigation items visible to each role
  */
 export const ROLE_NAV_ACCESS: Record<AppRole, string[]> = {
-  admin: ['/', '/vendor-management', '/supply-chain', '/assessments', '/compliance', '/incidents', '/monitoring', '/reports', '/admin/users', '/admin/config'],
+  admin: ['/', '/vendor-management', '/supply-chain', '/assessments', '/compliance', '/incidents', '/monitoring', '/reports', '/admin/users', '/admin/team-management', '/admin/roles', '/admin/config'],
   risk_officer: ['/', '/vendor-management', '/supply-chain', '/assessments', '/compliance', '/incidents', '/monitoring', '/reports'],
   analyst: ['/', '/vendor-management', '/supply-chain', '/assessments', '/compliance', '/incidents', '/monitoring', '/reports'],
   viewer: ['/', '/vendor-management', '/supply-chain', '/assessments', '/compliance', '/incidents', '/monitoring', '/reports'],

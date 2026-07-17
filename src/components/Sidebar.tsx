@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import AppLogo from '@/components/ui/AppLogo';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard,
   Building2,
@@ -146,6 +147,7 @@ interface SidebarProps {
 
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
+  const { canVisit, profile, role, roleDefinition, signOut } = useAuth();
 
   const groups = ['core', 'reporting', 'admin'];
 
@@ -162,6 +164,25 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
     return pathname.startsWith(href);
+  };
+
+  // Derive initials from profile name
+  const displayName = profile?.full_name ?? 'User';
+  const initials = displayName
+    .split(' ')
+    .slice(0, 2)
+    .map((n: string) => n[0])
+    .join('')
+    .toUpperCase();
+
+  const roleLabel = roleDefinition?.label ?? 'Viewer';
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch {
+      // ignore
+    }
   };
 
   return (
@@ -184,7 +205,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2">
         {groups.map((group) => {
-          const items = navItems.filter((n) => n.group === group);
+          // Filter nav items by role permission
+          const items = navItems.filter((n) => n.group === group && canVisit(n.href));
           if (!items.length) return null;
           return (
             <div key={`group-${group}`} className="mb-4">
@@ -277,15 +299,35 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           )}
         </button>
 
-        {/* User */}
-        <div className={`flex items-center gap-2.5 px-2 py-2 mt-1 rounded-md hover:bg-muted cursor-pointer transition-all duration-150 group relative ${collapsed ? 'justify-center' : ''}`}>
-          <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center flex-shrink-0">
-            <span className="text-2xs font-semibold text-primary font-mono-data">AO</span>
+        {/* User — shows real profile + role badge */}
+        <div
+          className={`flex items-center gap-2.5 px-2 py-2 mt-1 rounded-md hover:bg-muted cursor-pointer transition-all duration-150 group relative ${collapsed ? 'justify-center' : ''}`}
+          onClick={handleSignOut}
+          title={collapsed ? `${displayName} — ${roleLabel}` : undefined}
+        >
+          <div
+            className="w-7 h-7 rounded-full border flex items-center justify-center flex-shrink-0"
+            style={{
+              backgroundColor: `${roleDefinition?.color ?? '#6366f1'}22`,
+              borderColor: `${roleDefinition?.color ?? '#6366f1'}66`,
+            }}
+          >
+            <span
+              className="text-2xs font-semibold font-mono-data"
+              style={{ color: roleDefinition?.color ?? '#6366f1' }}
+            >
+              {initials || 'U'}
+            </span>
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-foreground truncate">Adaeze Okonkwo</p>
-              <p className="text-2xs text-muted-foreground truncate">Risk Officer</p>
+              <p className="text-xs font-semibold text-foreground truncate">{displayName}</p>
+              <p
+                className="text-2xs truncate font-medium"
+                style={{ color: roleDefinition?.color ?? '#6366f1' }}
+              >
+                {roleLabel}
+              </p>
             </div>
           )}
           {!collapsed && (
@@ -293,7 +335,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           )}
           {collapsed && (
             <span className="absolute left-full ml-3 px-2 py-1 bg-secondary border border-border rounded text-xs text-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-              Adaeze Okonkwo — Risk Officer
+              {displayName} — {roleLabel}
             </span>
           )}
         </div>

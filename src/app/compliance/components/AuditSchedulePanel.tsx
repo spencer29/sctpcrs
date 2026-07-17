@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Calendar, Clock, CheckCircle2, AlertTriangle, ChevronRight, Building2, User } from 'lucide-react';
+import { Calendar, Clock, CheckCircle2, AlertTriangle, ChevronRight, Building2, User, Plus } from 'lucide-react';
 
 interface AuditEvent {
   id: string;
@@ -48,7 +48,11 @@ const fwColor: Record<string, string> = {
 
 type FilterType = 'all' | 'upcoming' | 'in_progress' | 'overdue' | 'completed';
 
-export default function AuditSchedulePanel() {
+interface AuditSchedulePanelProps {
+  canSchedule?: boolean;
+}
+
+export default function AuditSchedulePanel({ canSchedule = false }: AuditSchedulePanelProps) {
   const [filter, setFilter] = useState<FilterType>('all');
 
   const filtered = AUDIT_EVENTS.filter((e) => {
@@ -79,12 +83,20 @@ export default function AuditSchedulePanel() {
             <h2 className="text-sm font-semibold text-foreground">Audit Schedule</h2>
             <p className="text-xs text-muted-foreground mt-0.5">Upcoming, active, and historical compliance audits</p>
           </div>
-          {overdue > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-status-critical/10 border border-status-critical/30">
-              <AlertTriangle size={12} className="text-status-critical" />
-              <span className="text-xs font-semibold text-status-critical">{overdue} Overdue</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {overdue > 0 && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-status-critical/10 border border-status-critical/30">
+                <AlertTriangle size={12} className="text-status-critical" />
+                <span className="text-xs font-semibold text-status-critical">{overdue} Overdue</span>
+              </div>
+            )}
+            {canSchedule && (
+              <button className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-primary/10 border border-primary/30 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors">
+                <Plus size={12} />
+                Schedule
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-1">
           {filters.map((f) => (
