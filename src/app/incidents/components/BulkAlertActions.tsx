@@ -16,7 +16,9 @@ import {
   Filter,
   Zap,
   FileText,
+  RefreshCw,
 } from 'lucide-react';
+import type { DbAlert } from '@/lib/supabase/realtimeDashboard';
 
 export interface Alert {
   id: string;
@@ -53,6 +55,19 @@ const INITIAL_ALERTS: Alert[] = [
   { id: 'alrt-010', severity: 'MEDIUM', type: 'QUESTIONNAIRE_OVERDUE', title: 'Security questionnaire overdue — 9 days past due', vendor: 'GTCo Digital Labs', time: '1d ago', status: 'active' },
 ];
 
+function mapDbAlert(db: DbAlert): Alert {
+  return {
+    id: db.id,
+    severity: db.severity,
+    type: db.alert_type,
+    title: db.title,
+    vendor: db.vendor,
+    time: db.time_label,
+    status: db.status,
+    cveId: db.cve_id,
+  };
+}
+
 const severityConfig = {
   CRITICAL: { dot: 'bg-status-critical alert-pulse', badge: 'bg-status-critical/10 text-status-critical border-status-critical/30', label: 'CRIT' },
   HIGH: { dot: 'bg-status-high', badge: 'bg-status-high/10 text-status-high border-status-high/30', label: 'HIGH' },
@@ -78,16 +93,26 @@ const statusConfig = {
 
 interface BulkAlertActionsProps {
   onAuditEntry: (entry: AuditEntry) => void;
+  liveAlerts?: DbAlert[];
+  isLive?: boolean;
+  onBulkStatusUpdate?: (ids: string[], status: 'acknowledged' | 'dismissed' | 'escalated') => Promise<void>;
 }
 
-export default function BulkAlertActions({ onAuditEntry }: BulkAlertActionsProps) {
-  const [alerts, setAlerts] = useState<Alert[]>(INITIAL_ALERTS);
+export default function BulkAlertActions({ onAuditEntry, liveAlerts, isLive, onBulkStatusUpdate }: BulkAlertActionsProps) {
+  // Use live data if available, otherwise fall back to local state
+  const [localAlerts, setLocalAlerts] = useState<Alert[]>(INITIAL_ALERTS);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [showActionModal, setShowActionModal] = useState<'acknowledge' | 'dismiss' | 'escalate' | null>(null);
   const [actionNote, setActionNote] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Merge live alerts with local state for optimistic updates
+  const alerts: Alert[] =
+    liveAlerts && liveAlerts.length > 0
+      ? liveAlerts.map(mapDbAlert)
+      : localAlerts;
 
   const activeAlerts = alerts.filter((a) => a.status === 'active');
   const filteredAlerts = alerts.filter((a) => {
@@ -145,12 +170,22 @@ export default function BulkAlertActions({ onAuditEntry }: BulkAlertActionsProps
     [alerts, selected]
   );
 
-  const applyBulkAction = (action: 'acknowledged' | 'dismissed' | 'escalated') => {
+  const applyBulkAction = async (action: 'acknowledged' | 'dismissed' | 'escalated') => {
     const entry = buildAuditEntry(action, actionNote);
     onAuditEntry(entry);
-    setAlerts((prev) =>
-      prev.map((a) => (selected.has(a.id) ? { ...a, status: action } : a))
-    );
+
+    const ids = Array.from(selected);
+
+    // Optimistic local update (for static fallback)
+    if (!liveAlerts || liveAlerts.length === 0) {
+      setLocalAlerts((prev) => prev.map((a) => (selected.has(a.id) ? { ...a, status: action } : a)));
+    }
+
+    // Persist to Supabase if live
+    if (onBulkStatusUpdate) {
+      await onBulkStatusUpdate(ids, action);
+    }
+
     setSelected(new Set());
     setActionNote('');
     setShowActionModal(null);
@@ -193,6 +228,12 @@ export default function BulkAlertActions({ onAuditEntry }: BulkAlertActionsProps
           <span className="text-2xs font-mono-data font-semibold px-1.5 py-0.5 rounded-full bg-status-critical text-white">
             {activeAlerts.length}
           </span>
+          {isLive && (
+            <span className="flex items-center gap-1 text-2xs text-status-low font-semibold">
+              <RefreshCw size={10} className="animate-spin" style={{ animationDuration: '3s' }} />
+              LIVE
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {/* Type filter */}

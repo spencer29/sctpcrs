@@ -12,7 +12,9 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  RefreshCw,
 } from 'lucide-react';
+import type { DbIncident, DbTimelineEvent } from '@/lib/supabase/realtimeDashboard';
 
 interface TimelineEvent {
   id: string;
@@ -34,7 +36,8 @@ interface Incident {
   timeline: TimelineEvent[];
 }
 
-const INCIDENTS: Incident[] = [
+// Static fallback data (used when Supabase data is not yet loaded)
+const INCIDENTS_STATIC: Incident[] = [
   {
     id: 'INC-2024-001',
     title: 'Unauthorized API Access — Interswitch Gateway',
@@ -112,6 +115,29 @@ const INCIDENTS: Incident[] = [
   },
 ];
 
+function mapDbToIncident(dbInc: DbIncident, allEvents: DbTimelineEvent[]): Incident {
+  const events = allEvents
+    .filter((ev) => ev.incident_id === dbInc.id)
+    .map((ev) => ({
+      id: ev.id,
+      timestamp: ev.event_timestamp,
+      type: ev.event_type,
+      actor: ev.actor,
+      title: ev.title,
+      detail: ev.detail,
+    }));
+  return {
+    id: dbInc.id,
+    title: dbInc.title,
+    severity: dbInc.severity,
+    status: dbInc.status,
+    vendor: dbInc.vendor,
+    detectedAt: dbInc.detected_at,
+    assignee: dbInc.assignee,
+    timeline: events,
+  };
+}
+
 const typeConfig: Record<TimelineEvent['type'], { icon: React.ReactNode; color: string; label: string }> = {
   detected: { icon: <AlertTriangle size={13} />, color: 'text-status-critical bg-status-critical/10 border-status-critical/30', label: 'Detected' },
   triaged: { icon: <Shield size={13} />, color: 'text-status-high bg-status-high/10 border-status-high/30', label: 'Triaged' },
@@ -136,13 +162,28 @@ const statusConfig = {
   resolved: { label: 'Resolved', cls: 'bg-status-low/10 text-status-low border-status-low/30' },
 };
 
-export { INCIDENTS };
+const INCIDENTS = INCIDENTS_STATIC;
+
+export { INCIDENTS_STATIC as INCIDENTS };
 export type { Incident };
 
-export default function IncidentTimeline({ selectedId }: { selectedId: string | null }) {
+interface IncidentTimelineProps {
+  selectedId: string | null;
+  liveIncidents?: DbIncident[];
+  liveEvents?: DbTimelineEvent[];
+  isLive?: boolean;
+}
+
+export default function IncidentTimeline({ selectedId, liveIncidents, liveEvents, isLive }: IncidentTimelineProps) {
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set(['t1', 't2']));
 
-  const incident = INCIDENTS.find((i) => i.id === selectedId) ?? INCIDENTS[0];
+  // Use live data if available, otherwise fall back to static
+  const incidents: Incident[] =
+    liveIncidents && liveIncidents.length > 0 && liveEvents
+      ? liveIncidents.map((inc) => mapDbToIncident(inc, liveEvents))
+      : INCIDENTS_STATIC;
+
+  const incident = incidents.find((i) => i.id === selectedId) ?? incidents[0];
 
   const toggleEvent = (id: string) => {
     setExpandedEvents((prev) => {
@@ -152,8 +193,10 @@ export default function IncidentTimeline({ selectedId }: { selectedId: string | 
     });
   };
 
-  const sev = severityConfig[incident.severity];
-  const stat = statusConfig[incident.status];
+  const sev = severityConfig[incident?.severity ?? 'medium'];
+  const stat = statusConfig[incident?.status ?? 'open'];
+
+  if (!incident) return null;
 
   return (
     <div className="bg-card border border-border rounded-xl p-5 space-y-4">
@@ -164,6 +207,12 @@ export default function IncidentTimeline({ selectedId }: { selectedId: string | 
             <span className="text-xs font-mono-data text-muted-foreground">{incident.id}</span>
             <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full border ${sev.cls}`}>{sev.label}</span>
             <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full border ${stat.cls}`}>{stat.label}</span>
+            {isLive && (
+              <span className="flex items-center gap-1 text-2xs text-status-low font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-status-low animate-pulse" />
+                LIVE
+              </span>
+            )}
           </div>
           <h3 className="text-sm font-semibold text-foreground mt-1 leading-snug">{incident.title}</h3>
           <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
@@ -176,7 +225,15 @@ export default function IncidentTimeline({ selectedId }: { selectedId: string | 
 
       {/* Timeline */}
       <div className="space-y-0">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Incident Timeline</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Incident Timeline</p>
+          {isLive && (
+            <span className="flex items-center gap-1 text-2xs text-muted-foreground">
+              <RefreshCw size={10} className="animate-spin" style={{ animationDuration: '3s' }} />
+              Auto-refreshing
+            </span>
+          )}
+        </div>
         <div className="relative">
           {/* Vertical line */}
           <div className="absolute left-4 top-0 bottom-0 w-px bg-border" />
@@ -186,7 +243,7 @@ export default function IncidentTimeline({ selectedId }: { selectedId: string | 
               const expanded = expandedEvents.has(event.id);
               const isLast = idx === incident.timeline.length - 1;
               return (
-                <div key={event.id} className={`relative pl-10 ${isLast ? '' : 'pb-1'}`}>
+                <div key={`${event.id}-${idx}`} className={`relative pl-10 ${isLast ? '' : 'pb-1'}`}>
                   {/* Dot */}
                   <div className={`absolute left-2 top-2.5 w-4 h-4 rounded-full border flex items-center justify-center ${cfg.color}`}>
                     {cfg.icon}
