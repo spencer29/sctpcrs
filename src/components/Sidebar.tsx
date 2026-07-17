@@ -14,6 +14,7 @@ import {
   FileText,
   Settings,
   Users,
+  UserCog,
   ChevronLeft,
   ChevronRight,
   Bell,
@@ -107,6 +108,13 @@ const navItems: NavItem[] = [
     label: 'User Management',
     href: '/admin/users',
     icon: <Users size={18} />,
+    group: 'admin',
+  },
+  {
+    id: 'nav-team-management',
+    label: 'Team Management',
+    href: '/admin/team-management',
+    icon: <UserCog size={18} />,
     group: 'admin',
   },
   {
