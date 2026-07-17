@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Bell, RefreshCw, Shield, Clock } from 'lucide-react';
+import { Search, RefreshCw, Shield, Clock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROLE_DEFINITIONS } from '@/lib/rbac/permissions';
+import NotificationDropdown from '@/components/NotificationDropdown';
 
 interface TopbarProps {
   sidebarCollapsed: boolean;
@@ -58,11 +59,8 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
           </div>
         )}
 
-        {/* Alerts bell */}
-        <button className="relative w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-150">
-          <Bell size={16} />
-          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-status-critical alert-pulse" />
-        </button>
+        {/* Notification dropdown */}
+        <NotificationDropdown />
       </div>
     </header>
   );
