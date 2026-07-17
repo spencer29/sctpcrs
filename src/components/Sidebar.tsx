@@ -72,6 +72,8 @@ const navItems: NavItem[] = [
     label: 'Compliance',
     href: '/compliance',
     icon: <ShieldCheck size={18} />,
+    badge: 4,
+    badgeSeverity: 'high',
     group: 'core',
   },
   {
