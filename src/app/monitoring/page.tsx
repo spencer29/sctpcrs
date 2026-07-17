@@ -2,26 +2,19 @@
 
 import React, { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import { useAuth } from '@/contexts/AuthContext';
+
 import VendorStatusGrid from './components/VendorStatusGrid';
 import AlertTrendCharts from './components/AlertTrendCharts';
 import SlaHealthPanel from './components/SlaHealthPanel';
-import {
-  Activity,
-  AlertTriangle,
-  CheckCircle,
-  Wifi,
-  WifiOff,
-  Zap,
-  ShieldAlert,
-  Clock,
-  RefreshCw,
-} from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle, Wifi, WifiOff, Zap, ShieldAlert, Clock, RefreshCw,  } from 'lucide-react';
 
 type ActiveTab = 'status' | 'alerts' | 'sla';
 
 export default function MonitoringPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('status');
   const [lastRefresh] = useState('Just now');
+  const { can } = useAuth();
 
   const kpis = [
     {

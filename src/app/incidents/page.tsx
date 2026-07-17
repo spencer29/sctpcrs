@@ -10,6 +10,7 @@ import BulkAlertActions from './components/BulkAlertActions';
 import AuditTrailPanel from './components/AuditTrailPanel';
 import { AuditEntry } from './components/BulkAlertActions';
 import ProactiveRiskForecast from './components/ProactiveRiskForecast';
+import { PermissionGate } from '@/components/rbac/PermissionGate';
 import {
   useRealtimeIncidents,
   useRealtimeAlerts,
@@ -182,10 +183,12 @@ export default function IncidentsPage() {
               Log, triage, and track security incidents with timeline, impact assessment, and escalation workflows
             </p>
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors">
-            <Plus size={15} />
-            Log Incident
-          </button>
+          <PermissionGate resource="incidents" action="create" silent>
+            <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors">
+              <Plus size={15} />
+              Log Incident
+            </button>
+          </PermissionGate>
         </div>
 
         {/* Error banners */}

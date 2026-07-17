@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import '../styles/tailwind.css';
 import { Toaster } from 'sonner';
+import { AuthProvider } from '@/contexts/AuthContext';
 
 const geistSans = Geist({
   subsets: ['latin'],
@@ -40,7 +41,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} dark`}>
       <body className={geistSans.className}>
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
         <Toaster
           position="bottom-right"
           theme="dark"

@@ -20,6 +20,7 @@ import {
   LogOut,
   HelpCircle,
   ClipboardList,
+  Lock,
 } from 'lucide-react';
 
 interface NavItem {
@@ -106,6 +107,13 @@ const navItems: NavItem[] = [
     label: 'User Management',
     href: '/admin/users',
     icon: <Users size={18} />,
+    group: 'admin',
+  },
+  {
+    id: 'nav-roles',
+    label: 'Roles & Permissions',
+    href: '/admin/roles',
+    icon: <Lock size={18} />,
     group: 'admin',
   },
   {

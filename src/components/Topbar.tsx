@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { Search, Bell, RefreshCw, Shield, Clock } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { ROLE_DEFINITIONS } from '@/lib/rbac/permissions';
 
 interface TopbarProps {
   sidebarCollapsed: boolean;
@@ -9,6 +11,7 @@ interface TopbarProps {
 
 export default function Topbar({ sidebarCollapsed }: TopbarProps) {
   const [searchVal, setSearchVal] = useState('');
+  const { role, profile } = useAuth();
 
   return (
     <header className="h-14 border-b border-border bg-card/80 backdrop-blur-sm flex items-center gap-4 px-6 lg:px-8 xl:px-10 2xl:px-12 flex-shrink-0 sticky top-0 z-40">
@@ -47,6 +50,13 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
           <Shield size={12} />
           <span>TLS 1.3</span>
         </div>
+
+        {/* Role badge */}
+        {role && (
+          <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-2xs font-semibold ${ROLE_DEFINITIONS[role].badgeClass}`}>
+            <span>{ROLE_DEFINITIONS[role].label}</span>
+          </div>
+        )}
 
         {/* Alerts bell */}
         <button className="relative w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-150">

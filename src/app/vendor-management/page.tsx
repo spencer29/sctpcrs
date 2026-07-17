@@ -1,9 +1,16 @@
+'use client';
+
 import React from 'react';
 import AppLayout from '@/components/AppLayout';
+import { useAuth } from '@/contexts/AuthContext';
+import { PermissionGate } from '@/components/rbac/PermissionGate';
 import VendorTableHeader from './components/VendorTableHeader';
 import VendorDataTable from './components/VendorDataTable';
+import { ShieldOff } from 'lucide-react';
 
 export default function VendorManagementPage() {
+  const { can, loading } = useAuth();
+
   return (
     <AppLayout>
       <div className="space-y-5 fade-in">
@@ -19,17 +26,33 @@ export default function VendorManagementPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-muted border border-border text-xs font-medium text-foreground hover:bg-secondary transition-all duration-150">
-              Export CSV
-            </button>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all duration-150 active:scale-95">
-              + Register Vendor
-            </button>
+            <PermissionGate resource="vendors" action="export" silent>
+              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-muted border border-border text-xs font-medium text-foreground hover:bg-secondary transition-all duration-150">
+                Export CSV
+              </button>
+            </PermissionGate>
+            <PermissionGate resource="vendors" action="create" silent>
+              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all duration-150 active:scale-95">
+                + Register Vendor
+              </button>
+            </PermissionGate>
           </div>
         </div>
 
-        <VendorTableHeader />
-        <VendorDataTable />
+        <PermissionGate
+          resource="vendors"
+          action="view"
+          fallback={
+            <div className="flex flex-col items-center justify-center py-20 gap-3">
+              <ShieldOff size={40} className="text-muted-foreground" />
+              <p className="text-sm font-medium text-foreground">Access Restricted</p>
+              <p className="text-xs text-muted-foreground">You do not have permission to view vendors.</p>
+            </div>
+          }
+        >
+          <VendorTableHeader />
+          <VendorDataTable />
+        </PermissionGate>
       </div>
     </AppLayout>
   );
