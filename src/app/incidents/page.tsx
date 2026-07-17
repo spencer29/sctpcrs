@@ -9,6 +9,7 @@ import EscalationWorkflowPanel from './components/EscalationWorkflowPanel';
 import BulkAlertActions from './components/BulkAlertActions';
 import AuditTrailPanel from './components/AuditTrailPanel';
 import { AuditEntry } from './components/BulkAlertActions';
+import ProactiveRiskForecast from './components/ProactiveRiskForecast';
 import {
   AlertTriangle,
   ShieldAlert,
@@ -19,10 +20,11 @@ import {
   Plus,
   ChevronRight,
   Layers,
+  Zap,
 } from 'lucide-react';
 
 type RightPanel = 'timeline' | 'impact' | 'remediation' | 'escalation';
-type MainTab = 'incidents' | 'bulk-alerts';
+type MainTab = 'incidents' | 'bulk-alerts' | 'risk-forecast';
 
 const severityConfig = {
   critical: { cls: 'bg-status-critical/10 text-status-critical border-status-critical/30', dot: 'bg-status-critical alert-pulse' },
@@ -140,6 +142,15 @@ export default function IncidentsPage() {
                 {auditEntries.length} new
               </span>
             )}
+          </button>
+          <button
+            onClick={() => setMainTab('risk-forecast')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-all duration-150 -mb-px ${
+              mainTab === 'risk-forecast' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Zap size={13} />
+            Risk Forecast
           </button>
         </div>
 
@@ -277,6 +288,9 @@ export default function IncidentsPage() {
             </div>
           </div>
         )}
+
+        {/* Risk Forecast tab */}
+        {mainTab === 'risk-forecast' && <ProactiveRiskForecast />}
       </div>
     </AppLayout>
   );
