@@ -161,7 +161,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           department: metadata?.department || '',
           job_title: metadata?.jobTitle || '',
         },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? (typeof window !== 'undefined' ? window.location.origin : '')}/auth/callback`,
       },
     });
     if (error) throw error;

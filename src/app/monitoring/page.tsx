@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import VendorStatusGrid from './components/VendorStatusGrid';
 import AlertTrendCharts from './components/AlertTrendCharts';
 import SlaHealthPanel from './components/SlaHealthPanel';
-import { Activity, AlertTriangle, CheckCircle, Wifi, WifiOff, Zap, ShieldAlert, Clock, RefreshCw,  } from 'lucide-react';
+import { Activity, AlertTriangle, Wifi, WifiOff, Zap, ShieldAlert, Clock, RefreshCw, CheckCircle } from 'lucide-react';
 
 type ActiveTab = 'status' | 'alerts' | 'sla';
 
