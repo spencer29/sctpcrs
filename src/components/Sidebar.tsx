@@ -147,7 +147,7 @@ interface SidebarProps {
 
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const { canVisit, profile, role, roleDefinition, signOut } = useAuth();
+  const { canVisit, profile, role, roleDefinition, signOut, loading } = useAuth();
 
   const groups = ['core', 'reporting', 'admin'];
 
@@ -206,7 +206,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto py-3 px-2">
         {groups.map((group) => {
           // Filter nav items by role permission
-          const items = navItems.filter((n) => n.group === group && canVisit(n.href));
+          const items = navItems.filter((n) => n.group === group && (loading || !role ? true : canVisit(n.href)));
           if (!items.length) return null;
           return (
             <div key={`group-${group}`} className="mb-4">
