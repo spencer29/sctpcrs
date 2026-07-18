@@ -130,15 +130,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id).finally(() => setLoading(false));
-      } else {
+
+      if (
+        event === 'SIGNED_IN' ||
+        event === 'TOKEN_REFRESHED' ||
+        event === 'MFA_CHALLENGE_VERIFIED' ||
+        event === 'USER_UPDATED'
+      ) {
+        if (session?.user) {
+          fetchProfile(session.user.id).finally(() => setLoading(false));
+        } else {
+          setLoading(false);
+        }
+      } else if (event === 'SIGNED_OUT') {
         setProfile(null);
         setTeams([]);
         setLoading(false);
+      } else {
+        if (session?.user) {
+          fetchProfile(session.user.id).finally(() => setLoading(false));
+        } else {
+          setProfile(null);
+          setTeams([]);
+          setLoading(false);
+        }
       }
     });
 

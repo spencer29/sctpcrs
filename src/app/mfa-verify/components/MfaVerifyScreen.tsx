@@ -119,7 +119,11 @@ export default function MfaVerifyScreen({ onBack }: MfaVerifyScreenProps) {
         if (verifyErr) throw verifyErr;
       }
 
-      // Session confirmed — redirect to dashboard
+      // Force a session refresh so the elevated aal2 session is persisted
+      // to cookies/localStorage before navigating away
+      await supabase.auth.refreshSession();
+
+      // Session confirmed and persisted — redirect to dashboard
       router.push('/');
     } catch {
       setError('Invalid or expired code. Please try again.');
