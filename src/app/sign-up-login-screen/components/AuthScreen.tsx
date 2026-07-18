@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { ShieldAlert, User, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
 export default function AuthScreen() {
   const [username, setUsername] = useState('');
@@ -9,6 +11,8 @@ export default function AuthScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const router = useRouter();
+  const supabase = createClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,13 +23,38 @@ export default function AuthScreen() {
     setError('');
     setIsLoading(true);
 
-    // Keycloak OIDC Authorization Code + PKCE redirect placeholder
-    // In production: redirect to Keycloak /auth endpoint with PKCE challenge
-    await new Promise((r) => setTimeout(r, 1200));
+    try {
+      // Primary credential verification via Supabase (email + password)
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: username.trim(),
+        password: password.trim(),
+      });
 
-    // Generic error — never reveal whether username or password was wrong
-    setError('Authentication failed. Please check your credentials and try again.');
-    setIsLoading(false);
+      if (signInError) throw signInError;
+
+      // Check if MFA is required for this session
+      if (data?.session) {
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (
+          aal?.nextLevel === 'aal2' ||
+          (aal?.currentLevel === 'aal1' && aal?.nextLevel === 'aal2')
+        ) {
+          // MFA required — redirect to second-factor screen before session is fully trusted
+          router.push('/mfa-verify');
+        } else {
+          // No MFA enrolled — go straight to dashboard
+          router.push('/');
+        }
+      } else {
+        // Partial sign-in (MFA challenge pending) — redirect to MFA screen
+        router.push('/mfa-verify');
+      }
+    } catch {
+      // Generic error — never reveal whether username or password was wrong
+      setError('Authentication failed. Please check your credentials and try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
