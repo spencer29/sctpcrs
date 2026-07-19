@@ -65,6 +65,8 @@ export function useRealtimeIncidents() {
   const [timelineEvents, setTimelineEvents] = useState<DbTimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Stable channel name — generated once per hook instance, never changes
+  const channelName = useRef(`incidents_realtime_${Math.random().toString(36).slice(2)}`);
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null);
 
   const fetchAll = useCallback(async () => {
@@ -99,24 +101,21 @@ export function useRealtimeIncidents() {
     }
   }, []);
 
-  // Initial fetch — re-runs only when fetchAll identity changes (stable)
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
 
-  // Realtime subscription — empty deps so it only mounts/unmounts once
   useEffect(() => {
     const supabase = createClient();
 
-    // Clean up any existing channel before creating a new one
+    // Fully remove any existing channel before creating a new one
     if (channelRef.current) {
-      channelRef.current.unsubscribe();
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
 
     const incidentChannel = supabase
-      .channel(`incidents_realtime_${Date.now()}`)
+      .channel(channelName.current)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incidents' }, (payload) => {
         if (payload.eventType === 'INSERT') {
           setIncidents((prev) => [payload.new as DbIncident, ...prev]);
@@ -150,7 +149,6 @@ export function useRealtimeIncidents() {
     channelRef.current = incidentChannel;
 
     return () => {
-      incidentChannel.unsubscribe();
       supabase.removeChannel(incidentChannel);
       channelRef.current = null;
     };
@@ -165,6 +163,8 @@ export function useRealtimeAlerts() {
   const [alerts, setAlerts] = useState<DbAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Stable channel name — generated once per hook instance, never changes
+  const channelName = useRef(`alerts_realtime_${Math.random().toString(36).slice(2)}`);
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null);
 
   const fetchAlerts = useCallback(async () => {
@@ -188,24 +188,21 @@ export function useRealtimeAlerts() {
     }
   }, []);
 
-  // Initial fetch — re-runs only when fetchAlerts identity changes (stable)
   useEffect(() => {
     fetchAlerts();
   }, [fetchAlerts]);
 
-  // Realtime subscription — empty deps so it only mounts/unmounts once
   useEffect(() => {
     const supabase = createClient();
 
-    // Clean up any existing channel before creating a new one
+    // Fully remove any existing channel before creating a new one
     if (channelRef.current) {
-      channelRef.current.unsubscribe();
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
 
     const alertChannel = supabase
-      .channel(`alerts_realtime_${Date.now()}`)
+      .channel(channelName.current)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, (payload) => {
         if (payload.eventType === 'INSERT') {
           setAlerts((prev) => [payload.new as DbAlert, ...prev]);
@@ -222,7 +219,6 @@ export function useRealtimeAlerts() {
     channelRef.current = alertChannel;
 
     return () => {
-      alertChannel.unsubscribe();
       supabase.removeChannel(alertChannel);
       channelRef.current = null;
     };
@@ -251,6 +247,8 @@ export function useRealtimeCompliance() {
   const [frameworks, setFrameworks] = useState<DbComplianceFramework[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Stable channel name — generated once per hook instance, never changes
+  const channelName = useRef(`compliance_realtime_${Math.random().toString(36).slice(2)}`);
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null);
 
   const fetchFrameworks = useCallback(async () => {
@@ -274,24 +272,21 @@ export function useRealtimeCompliance() {
     }
   }, []);
 
-  // Initial fetch — re-runs only when fetchFrameworks identity changes (stable)
   useEffect(() => {
     fetchFrameworks();
   }, [fetchFrameworks]);
 
-  // Realtime subscription — empty deps so it only mounts/unmounts once
   useEffect(() => {
     const supabase = createClient();
 
-    // Clean up any existing channel before creating a new one
+    // Fully remove any existing channel before creating a new one
     if (channelRef.current) {
-      channelRef.current.unsubscribe();
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
 
     const complianceChannel = supabase
-      .channel(`compliance_realtime_${Date.now()}`)
+      .channel(channelName.current)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'compliance_frameworks' }, (payload) => {
         if (payload.eventType === 'INSERT') {
           setFrameworks((prev) => [...prev, payload.new as DbComplianceFramework]);
@@ -310,7 +305,6 @@ export function useRealtimeCompliance() {
     channelRef.current = complianceChannel;
 
     return () => {
-      complianceChannel.unsubscribe();
       supabase.removeChannel(complianceChannel);
       channelRef.current = null;
     };
