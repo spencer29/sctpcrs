@@ -1,7 +1,7 @@
 // SC-TPCRS Role-Based Access Control
-// Roles: Admin, Risk Officer, Analyst, Viewer
+// Roles: Admin, Risk Officer, Compliance Manager, CISO, Analyst, Viewer
 
-export type AppRole = 'admin' | 'risk_officer' | 'analyst' | 'viewer';
+export type AppRole = 'admin' | 'risk_officer' | 'compliance_manager' | 'ciso' | 'analyst' | 'viewer';
 export type ResourceType =
   | 'vendors'
   | 'incidents' |'alerts' |'dashboards' |'compliance' |'assessments' |'reports' |'supply_chain' |'monitoring' |'admin';
@@ -23,7 +23,15 @@ export const ROLE_DEFINITIONS: Record<AppRole, RoleDefinition> = {
     description: 'Full platform access — manage users, roles, teams, and all resources',
     color: '#ef4444',
     badgeClass: 'bg-status-critical/10 text-status-critical border border-status-critical/30',
-    level: 4,
+    level: 6,
+  },
+  ciso: {
+    id: 'ciso',
+    label: 'CISO',
+    description: 'Chief Information Security Officer — near-admin strategic oversight across all security domains',
+    color: '#8b5cf6',
+    badgeClass: 'bg-purple-500/10 text-purple-400 border border-purple-500/30',
+    level: 5,
   },
   risk_officer: {
     id: 'risk_officer',
@@ -31,6 +39,14 @@ export const ROLE_DEFINITIONS: Record<AppRole, RoleDefinition> = {
     description: 'Broad access to risk resources — can escalate, approve, and manage incidents',
     color: '#f97316',
     badgeClass: 'bg-status-high/10 text-status-high border border-status-high/30',
+    level: 4,
+  },
+  compliance_manager: {
+    id: 'compliance_manager',
+    label: 'Compliance Manager',
+    description: 'Full compliance and assessment access — can approve compliance items and manage frameworks',
+    color: '#06b6d4',
+    badgeClass: 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30',
     level: 3,
   },
   analyst: {
@@ -65,12 +81,36 @@ export const PERMISSION_MATRIX: Record<AppRole, Partial<Record<ResourceType, Per
     monitoring:   ['view', 'edit'],
     admin:        ['view', 'create', 'edit', 'delete'],
   },
+  ciso: {
+    vendors:      ['view', 'create', 'edit', 'delete', 'export'],
+    incidents:    ['view', 'create', 'edit', 'delete', 'escalate', 'approve'],
+    alerts:       ['view', 'create', 'edit', 'delete', 'escalate'],
+    dashboards:   ['view', 'create', 'edit', 'delete'],
+    compliance:   ['view', 'create', 'edit', 'delete', 'approve'],
+    assessments:  ['view', 'create', 'edit', 'delete', 'approve'],
+    reports:      ['view', 'create', 'export'],
+    supply_chain: ['view', 'edit'],
+    monitoring:   ['view', 'edit'],
+    admin:        [],
+  },
   risk_officer: {
     vendors:      ['view', 'create', 'edit', 'export'],
     incidents:    ['view', 'create', 'edit', 'escalate', 'approve'],
     alerts:       ['view', 'create', 'edit', 'escalate'],
     dashboards:   ['view', 'create', 'edit'],
     compliance:   ['view', 'create', 'edit', 'approve'],
+    assessments:  ['view', 'create', 'edit', 'approve'],
+    reports:      ['view', 'create', 'export'],
+    supply_chain: ['view'],
+    monitoring:   ['view'],
+    admin:        [],
+  },
+  compliance_manager: {
+    vendors:      ['view', 'create', 'edit', 'export'],
+    incidents:    ['view', 'create', 'edit', 'escalate'],
+    alerts:       ['view', 'create', 'edit'],
+    dashboards:   ['view', 'create', 'edit'],
+    compliance:   ['view', 'create', 'edit', 'delete', 'approve'],
     assessments:  ['view', 'create', 'edit', 'approve'],
     reports:      ['view', 'create', 'export'],
     supply_chain: ['view'],
@@ -136,7 +176,9 @@ export function getAllowedActions(role: AppRole | null | undefined, resource: Re
  */
 export const ROLE_NAV_ACCESS: Record<AppRole, string[]> = {
   admin: ['/', '/vendor-management', '/supply-chain', '/assessments', '/compliance', '/incidents', '/monitoring', '/reports', '/admin/users', '/admin/team-management', '/admin/roles', '/admin/config'],
+  ciso: ['/', '/vendor-management', '/supply-chain', '/assessments', '/compliance', '/incidents', '/monitoring', '/reports'],
   risk_officer: ['/', '/vendor-management', '/supply-chain', '/assessments', '/compliance', '/incidents', '/monitoring', '/reports'],
+  compliance_manager: ['/', '/vendor-management', '/supply-chain', '/assessments', '/compliance', '/incidents', '/monitoring', '/reports'],
   analyst: ['/', '/vendor-management', '/supply-chain', '/assessments', '/compliance', '/incidents', '/monitoring', '/reports'],
   viewer: ['/', '/vendor-management', '/supply-chain', '/assessments', '/compliance', '/incidents', '/monitoring', '/reports'],
 };
@@ -149,9 +191,11 @@ export function canAccessRoute(role: AppRole | null | undefined, path: string): 
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   admin: 'Admin',
+  ciso: 'CISO',
   risk_officer: 'Risk Officer',
+  compliance_manager: 'Compliance Manager',
   analyst: 'Analyst',
   viewer: 'Viewer',
 };
 
-export const ALL_ROLES: AppRole[] = ['admin', 'risk_officer', 'analyst', 'viewer'];
+export const ALL_ROLES: AppRole[] = ['admin', 'ciso', 'risk_officer', 'compliance_manager', 'analyst', 'viewer'];
