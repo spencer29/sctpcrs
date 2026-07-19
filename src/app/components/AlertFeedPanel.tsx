@@ -1,83 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
-import { CheckCircle, Clock } from 'lucide-react';
-
-// Backend integration point: GET /api/v1/monitoring/alerts?status=unacknowledged&limit=8
-const alerts = [
-  {
-    id: 'alert-001',
-    severity: 'CRITICAL' as const,
-    title: 'KEV CVE-2024-3094 in Paystack Integration SBOM',
-    vendor: 'Paystack Integration Ltd',
-    time: '14m ago',
-    type: 'KEV_MATCH',
-    acked: false,
-  },
-  {
-    id: 'alert-002',
-    severity: 'CRITICAL' as const,
-    title: 'KEV CVE-2024-3094 in Flutterwave SDK SBOM',
-    vendor: 'Flutterwave SDK Services',
-    time: '14m ago',
-    type: 'KEV_MATCH',
-    acked: false,
-  },
-  {
-    id: 'alert-003',
-    severity: 'HIGH' as const,
-    title: 'VRS increased +18 pts — Interswitch Cloud',
-    vendor: 'Interswitch Cloud Services',
-    time: '2h ago',
-    type: 'VRS_SPIKE',
-    acked: false,
-  },
-  {
-    id: 'alert-004',
-    severity: 'HIGH' as const,
-    title: 'ISO 27001 cert expiry in 28 days',
-    vendor: 'RemitaNet Technologies',
-    time: '4h ago',
-    type: 'CERT_EXPIRY',
-    acked: false,
-  },
-  {
-    id: 'alert-005',
-    severity: 'HIGH' as const,
-    title: 'Questionnaire overdue — 9 days past due',
-    vendor: 'GTCo Digital Labs',
-    time: '1d ago',
-    type: 'QUESTIONNAIRE_OVERDUE',
-    acked: false,
-  },
-  {
-    id: 'alert-006',
-    severity: 'MEDIUM' as const,
-    title: 'PCI DSS AOC expiry in 47 days',
-    vendor: 'Unified Payments Ltd',
-    time: '6h ago',
-    type: 'CERT_EXPIRY',
-    acked: false,
-  },
-  {
-    id: 'alert-007',
-    severity: 'MEDIUM' as const,
-    title: 'New CVE-2024-21626 (CVSS 8.6) in vendor SBOM',
-    vendor: 'CloudPay Africa Ltd',
-    time: '8h ago',
-    type: 'CVE_MATCH',
-    acked: false,
-  },
-  {
-    id: 'alert-008',
-    severity: 'LOW' as const,
-    title: 'External posture score degraded 3 pts',
-    vendor: 'FinEdge Analytics',
-    time: '1d ago',
-    type: 'POSTURE_CHANGE',
-    acked: true,
-  },
-];
+import React, { useState, useEffect, useRef } from 'react';
+import { CheckCircle, Clock, Loader2 } from 'lucide-react';
+import { useRealtimeAlerts, DbAlert } from '@/lib/supabase/realtimeDashboard';
 
 const severityConfig = {
   CRITICAL: { label: 'CRIT', class: 'badge-critical', dot: 'bg-status-critical alert-pulse' },
@@ -86,25 +11,76 @@ const severityConfig = {
   LOW: { label: 'LOW', class: 'badge-low', dot: 'bg-status-low' },
 };
 
-export default function AlertFeedPanel() {
-  const [acknowledged, setAcknowledged] = useState<Set<string>>(
-    new Set(alerts.filter((a) => a.acked).map((a) => a.id))
-  );
+function requestBrowserNotificationPermission() {
+  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
 
-  const handleAck = (id: string) => {
-    setAcknowledged((prev) => new Set([...prev, id]));
+function fireBrowserNotification(alert: DbAlert) {
+  if (typeof window === 'undefined' || !('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  const body = alert.vendor ? `${alert.vendor} · ${alert.time_label}` : alert.time_label;
+  try {
+    new Notification(`[${alert.severity}] ${alert.title}`, {
+      body,
+      icon: '/favicon.ico',
+      tag: alert.id,
+    });
+  } catch {
+    // Notification API not available in this context
+  }
+}
+
+export default function AlertFeedPanel() {
+  const { alerts, loading, error, updateAlertStatus } = useRealtimeAlerts();
+  const prevAlertIdsRef = useRef<Set<string>>(new Set());
+  const isFirstLoad = useRef(true);
+
+  // Request browser notification permission on mount
+  useEffect(() => {
+    requestBrowserNotificationPermission();
+  }, []);
+
+  // Fire browser notifications for newly inserted alerts (not on initial load)
+  useEffect(() => {
+    if (loading) return;
+
+    if (isFirstLoad.current) {
+      // Seed the known IDs on first load — don't notify for existing alerts
+      prevAlertIdsRef.current = new Set(alerts.map((a) => a.id));
+      isFirstLoad.current = false;
+      return;
+    }
+
+    alerts.forEach((alert) => {
+      if (!prevAlertIdsRef.current.has(alert.id)) {
+        // New alert arrived via realtime INSERT
+        fireBrowserNotification(alert);
+        prevAlertIdsRef.current.add(alert.id);
+      }
+    });
+  }, [alerts, loading]);
+
+  const handleAck = async (id: string) => {
+    await updateAlertStatus([id], 'acknowledged');
   };
 
-  const unackedCount = alerts.filter((a) => !acknowledged.has(a.id)).length;
+  const activeAlerts = alerts.filter((a) => a.status !== 'dismissed');
+  const unackedCount = activeAlerts.filter((a) => a.status === 'active').length;
 
   return (
     <div className="card-elevated p-5 flex flex-col">
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-foreground">Active Alerts</h3>
-          <span className="text-2xs font-mono-data font-semibold px-1.5 py-0.5 rounded-full bg-status-critical text-white">
-            {unackedCount}
-          </span>
+          {loading ? (
+            <Loader2 size={12} className="animate-spin text-muted-foreground" />
+          ) : (
+            <span className="text-2xs font-mono-data font-semibold px-1.5 py-0.5 rounded-full bg-status-critical text-white">
+              {unackedCount}
+            </span>
+          )}
         </div>
         <button className="text-2xs text-primary hover:text-primary/80 font-medium transition-colors">
           View All →
@@ -112,9 +88,15 @@ export default function AlertFeedPanel() {
       </div>
 
       <div className="space-y-1 overflow-y-auto max-h-[280px]">
-        {alerts.map((alert) => {
-          const cfg = severityConfig[alert.severity];
-          const isAcked = acknowledged.has(alert.id);
+        {error && (
+          <p className="text-xs text-status-critical px-2 py-1">{error}</p>
+        )}
+        {!loading && activeAlerts.length === 0 && !error && (
+          <p className="text-xs text-muted-foreground px-2 py-4 text-center">No active alerts</p>
+        )}
+        {activeAlerts.map((alert) => {
+          const cfg = severityConfig[alert.severity] ?? severityConfig.LOW;
+          const isAcked = alert.status !== 'active';
 
           return (
             <div
@@ -138,7 +120,7 @@ export default function AlertFeedPanel() {
                   <span className="text-2xs text-muted-foreground">·</span>
                   <span className="text-2xs font-mono-data text-muted-foreground flex items-center gap-0.5">
                     <Clock size={9} />
-                    {alert.time}
+                    {alert.time_label}
                   </span>
                 </div>
               </div>
