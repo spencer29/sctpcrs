@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import AssessmentInitiateModal, { InitiateFormData } from './components/AssessmentInitiateModal';
 import QuestionnaireTracker from './components/QuestionnaireTracker';
@@ -8,6 +8,7 @@ import ControlFindingsPanel from './components/ControlFindingsPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRoleFilter, filterByAssignee } from '@/lib/rbac/useRoleFilter';
 import { PermissionGate } from '@/components/rbac/PermissionGate';
+import { createClient } from '@/lib/supabase/client';
 import {
   ClipboardList,
   Plus,
@@ -75,7 +76,71 @@ export default function AssessmentsPage() {
   const { profile } = useAuth();
   const roleFilter = useRoleFilter();
 
-  // Scope assessments to assigned ones for Auditor/Vendor Manager personas
+  const fetchAssessments = useCallback(async () => {
+    const supabase = createClient();
+    try {
+      // Use incidents as the source of truth for assessments
+      const { data: incidents } = await supabase
+        .from('incidents')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!incidents || incidents.length === 0) return;
+
+      // Map incidents to assessment-like objects
+      const liveAssessments: Assessment[] = incidents.map((inc, i) => {
+        const isResolved = inc.status === 'resolved';
+        const isContained = inc.status === 'contained';
+        const isOpen = inc.status === 'open';
+        const isInvestigating = inc.status === 'investigating';
+
+        let status: Assessment['status'] = 'IN_PROGRESS';
+        if (isResolved) status = 'COMPLETED';
+        else if (isContained) status = 'IN_PROGRESS';
+        else if (isOpen) {
+          // Check if overdue (detected more than 7 days ago)
+          const detected = new Date(inc.detected_at || inc.created_at);
+          const daysSince = Math.floor((Date.now() - detected.getTime()) / 86400000);
+          status = daysSince > 7 ? 'OVERDUE' : 'IN_PROGRESS';
+        }
+
+        const riskTier = inc.severity === 'critical' ? 'CRITICAL' : inc.severity === 'high' ? 'HIGH' : inc.severity === 'medium' ? 'MEDIUM' : 'LOW';
+        const questionnairePct = isResolved ? 100 : isContained ? 75 : isInvestigating ? 50 : 25;
+        const findingsCritical = inc.severity === 'critical' ? 1 : 0;
+
+        const detectedDate = new Date(inc.detected_at || inc.created_at);
+        const dueDate = new Date(detectedDate);
+        dueDate.setDate(dueDate.getDate() + 14);
+
+        return {
+          id: inc.id,
+          vendorId: `vendor-${i}`,
+          vendorName: inc.vendor || 'Unknown Vendor',
+          type: `${inc.severity?.toUpperCase()} Incident Review`,
+          frameworks: ['ISO 27001', 'CBN TPRMF'],
+          status,
+          questionnairePct,
+          findingsOpen: isResolved ? 0 : 1,
+          findingsCritical,
+          initiated: detectedDate.toISOString().split('T')[0],
+          dueDate: dueDate.toISOString().split('T')[0],
+          assignee: inc.assignee || 'Unassigned',
+          riskTier,
+        };
+      });
+
+      if (liveAssessments.length > 0) {
+        setAssessments(liveAssessments);
+      }
+    } catch {
+      // silently fail, keep mock data
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAssessments();
+  }, [fetchAssessments]);
+
   const scopedAssessments = filterByAssignee(
     assessments,
     roleFilter.assessmentScope,
@@ -180,7 +245,6 @@ export default function AssessmentsPage() {
         {/* Tab content */}
         {activeTab === 'timeline' && (
           <div className="space-y-2">
-            {/* Table header */}
             <div className="grid grid-cols-12 gap-3 px-4 py-2 text-2xs font-semibold text-muted-foreground uppercase tracking-wider">
               <span className="col-span-1">ID</span>
               <span className="col-span-2">Vendor</span>
@@ -200,12 +264,9 @@ export default function AssessmentsPage() {
                 <div
                   key={a.id}
                   className="grid grid-cols-12 gap-3 px-4 py-3 bg-card border border-border rounded-lg items-center hover:border-primary/40 hover:bg-muted/30 transition-all duration-150 cursor-pointer group"
-                  onClick={() => {
-                    setSelectedAssessment(a);
-                    setActiveTab('questionnaire');
-                  }}
+                  onClick={() => { setSelectedAssessment(a); setActiveTab('questionnaire'); }}
                 >
-                  <span className="col-span-1 text-xs font-mono-data text-primary">{a.id}</span>
+                  <span className="col-span-1 text-xs font-mono-data text-primary truncate">{a.id.length > 12 ? a.id.slice(0, 12) + '…' : a.id}</span>
                   <div className="col-span-2 flex items-center gap-1.5 min-w-0">
                     <Building2 size={13} className="text-muted-foreground flex-shrink-0" />
                     <span className="text-sm text-foreground truncate">{a.vendorName}</span>
@@ -218,10 +279,7 @@ export default function AssessmentsPage() {
                   <div className="col-span-1">
                     <div className="flex items-center gap-1.5">
                       <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${a.questionnairePct === 100 ? 'bg-status-low' : 'bg-primary'}`}
-                          style={{ width: `${a.questionnairePct}%` }}
-                        />
+                        <div className={`h-full rounded-full transition-all ${a.questionnairePct === 100 ? 'bg-status-low' : 'bg-primary'}`} style={{ width: `${a.questionnairePct}%` }} />
                       </div>
                       <span className="text-2xs font-mono-data text-muted-foreground w-7 text-right">{a.questionnairePct}%</span>
                     </div>
@@ -229,9 +287,7 @@ export default function AssessmentsPage() {
                   <div className="col-span-1 flex items-center gap-1.5">
                     <span className="text-sm font-mono-data text-foreground">{a.findingsOpen}</span>
                     {a.findingsCritical > 0 && (
-                      <span className="text-2xs font-mono-data px-1 py-0.5 rounded bg-status-critical/10 text-status-critical border border-status-critical/30">
-                        {a.findingsCritical}C
-                      </span>
+                      <span className="text-2xs font-mono-data px-1 py-0.5 rounded bg-status-critical/10 text-status-critical border border-status-critical/30">{a.findingsCritical}C</span>
                     )}
                   </div>
                   <span className="col-span-1 text-xs font-mono-data text-muted-foreground">{a.initiated}</span>
@@ -257,11 +313,10 @@ export default function AssessmentsPage() {
 
         {activeTab === 'questionnaire' && (
           <div>
-            {/* Vendor selector */}
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <span className="text-xs text-muted-foreground">Viewing questionnaire for:</span>
               <div className="flex gap-2 flex-wrap">
-                {scopedAssessments.filter((a) => a.status !== 'CANCELLED').map((a) => (
+                {scopedAssessments.filter((a) => a.status !== 'CANCELLED').slice(0, 8).map((a) => (
                   <button
                     key={a.id}
                     onClick={() => setSelectedAssessment(a)}
@@ -270,7 +325,7 @@ export default function AssessmentsPage() {
                         ? 'bg-primary/20 border-primary text-primary' :'bg-muted border-border text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {a.id} · {a.vendorName.split(' ')[0]}
+                    {a.vendorName.split(' ')[0]}
                   </button>
                 ))}
               </div>
@@ -282,9 +337,7 @@ export default function AssessmentsPage() {
           </div>
         )}
 
-        {activeTab === 'findings' && (
-          <ControlFindingsPanel />
-        )}
+        {activeTab === 'findings' && <ControlFindingsPanel />}
       </div>
 
       {showInitiateModal && (

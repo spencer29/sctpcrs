@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { CheckCircle2, XCircle, AlertTriangle, Clock, TrendingUp, TrendingDown } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 
 interface FrameworkVendorCell {
   status: 'COMPLIANT' | 'NON_COMPLIANT' | 'PARTIAL' | 'PENDING' | 'EXEMPT';
@@ -25,7 +26,8 @@ interface FrameworkRow {
   vendors: Record<string, FrameworkVendorCell>;
 }
 
-const FRAMEWORKS: FrameworkRow[] = [
+// Static fallback data
+const FRAMEWORKS_STATIC: FrameworkRow[] = [
   {
     id: 'iso27001',
     name: 'ISO/IEC 27001:2022',
@@ -201,6 +203,45 @@ interface Props {
 }
 
 export default function FrameworkStatusGrid({ onFrameworkSelect, selectedFramework }: Props) {
+  const [frameworks, setFrameworks] = useState<FrameworkRow[]>(FRAMEWORKS_STATIC);
+
+  const fetchData = useCallback(async () => {
+    const supabase = createClient();
+    try {
+      const { data } = await supabase
+        .from('compliance_frameworks')
+        .select('*')
+        .order('overall_score', { ascending: false });
+
+      if (data && data.length > 0) {
+        const rows: FrameworkRow[] = data.map((fw) => ({
+          id: fw.id,
+          name: fw.name,
+          shortName: fw.short_name,
+          category: fw.category,
+          totalVendors: fw.total_vendors || 0,
+          compliant: fw.compliant || 0,
+          partial: fw.partial || 0,
+          nonCompliant: fw.non_compliant || 0,
+          pending: fw.pending || 0,
+          overallScore: fw.overall_score || 0,
+          trend: fw.trend || 'stable',
+          trendDelta: fw.trend_delta || 0,
+          nextAudit: fw.next_audit || '—',
+          // Vendor cells remain static as there's no vendor-framework mapping table
+          vendors: FRAMEWORKS_STATIC.find((f) => f.id === fw.id)?.vendors || {},
+        }));
+        setFrameworks(rows);
+      }
+    } catch {
+      // silently fail, keep static fallback
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
       <div className="px-5 py-4 border-b border-border flex items-center justify-between">
@@ -231,7 +272,7 @@ export default function FrameworkStatusGrid({ onFrameworkSelect, selectedFramewo
             </tr>
           </thead>
           <tbody>
-            {FRAMEWORKS.map((fw) => {
+            {frameworks.map((fw) => {
               const isSelected = selectedFramework === fw.id;
               return (
                 <tr
@@ -299,5 +340,3 @@ export default function FrameworkStatusGrid({ onFrameworkSelect, selectedFramewo
     </div>
   );
 }
-
-export { FRAMEWORKS };
