@@ -116,7 +116,7 @@ export function useRealtimeIncidents() {
     }
 
     const incidentChannel = supabase
-      .channel('incidents_realtime')
+      .channel(`incidents_realtime_${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incidents' }, (payload) => {
         if (payload.eventType === 'INSERT') {
           setIncidents((prev) => [payload.new as DbIncident, ...prev]);
@@ -205,7 +205,7 @@ export function useRealtimeAlerts() {
     }
 
     const alertChannel = supabase
-      .channel('alerts_realtime')
+      .channel(`alerts_realtime_${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, (payload) => {
         if (payload.eventType === 'INSERT') {
           setAlerts((prev) => [payload.new as DbAlert, ...prev]);
@@ -291,7 +291,7 @@ export function useRealtimeCompliance() {
     }
 
     const complianceChannel = supabase
-      .channel('compliance_realtime')
+      .channel(`compliance_realtime_${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'compliance_frameworks' }, (payload) => {
         if (payload.eventType === 'INSERT') {
           setFrameworks((prev) => [...prev, payload.new as DbComplianceFramework]);
