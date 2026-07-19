@@ -5,7 +5,8 @@ import AppLayout from '@/components/AppLayout';
 import { AdminOnly } from '@/components/rbac/PermissionGate';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROLE_DEFINITIONS, ALL_ROLES, AppRole, PERMISSION_MATRIX,  } from '@/lib/rbac/permissions';
-import { Users, Search, Edit2, Trash2, Shield, X, Check, UserPlus, Building2, Mail, Crown, AlertTriangle, Filter, MoreVertical, Eye, EyeOff, RefreshCw, Lock,  } from 'lucide-react';
+import { Users, Search, Edit2, Trash2, Shield, X, Check, UserPlus, Building2, Mail, Crown, AlertTriangle, Filter, MoreVertical, Eye, EyeOff, RefreshCw, Lock, Link2 } from 'lucide-react';
+import InviteTeamMemberModal from './components/InviteTeamMemberModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -268,7 +269,7 @@ function MemberModal({ member, teams, onSave, onClose, isNew }: MemberModalProps
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TeamManagementPage() {
-  const { role: currentRole } = useAuth();
+  const { role: currentRole, user } = useAuth();
 
   const [members, setMembers] = useState<TeamMember[]>(MOCK_MEMBERS);
   const [teams] = useState<Team[]>(MOCK_TEAMS);
@@ -279,6 +280,7 @@ export default function TeamManagementPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -361,13 +363,22 @@ export default function TeamManagementPage() {
                 Create, edit, and manage team members — assign roles, permissions, and access scope
               </p>
             </div>
-            <button
-              onClick={openAdd}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
-            >
-              <UserPlus size={15} />
-              Add Member
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setInviteModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 border border-primary/40 text-primary rounded-md text-sm font-medium hover:bg-primary/5 transition-colors"
+              >
+                <Link2 size={15} />
+                Invite Member
+              </button>
+              <button
+                onClick={openAdd}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
+                <UserPlus size={15} />
+                Add Member
+              </button>
+            </div>
           </div>
 
           {/* Stats row */}
@@ -710,6 +721,17 @@ export default function TeamManagementPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Invite modal */}
+        {inviteModalOpen && user?.id && (
+          <InviteTeamMemberModal
+            currentUserId={user.id}
+            onClose={() => setInviteModalOpen(false)}
+            onInviteSent={(email, role) => {
+              setInviteModalOpen(false);
+            }}
+          />
         )}
 
         {/* Member modal */}
