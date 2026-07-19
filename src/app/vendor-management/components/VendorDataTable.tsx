@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { TrendingUp, TrendingDown, Minus, Eye, FileSearch, PauseCircle, MoreHorizontal, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown, CheckSquare, Square, Send, Download, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 import VendorDetailModal from './VendorDetailModal';
 import VendorRiskWorkflowModal from './VendorRiskWorkflowModal';
 
@@ -288,6 +289,7 @@ const formatDate = (dateStr: string) => {
 const PAGE_SIZE_OPTIONS = [10, 12, 20, 50];
 
 export default function VendorDataTable() {
+  const router = useRouter();
   const [sortField, setSortField] = useState<SortField>('vrs');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -471,7 +473,7 @@ export default function VendorDataTable() {
                       // Don't open modal when clicking checkbox or action buttons
                       const target = e.target as HTMLElement;
                       if (target.closest('button') || target.closest('a')) return;
-                      setDetailVendor(vendor);
+                      router.push(`/vendor-management/${vendor.id}`);
                     }}
                     style={{ cursor: 'pointer' }}
                   >
@@ -612,7 +614,7 @@ export default function VendorDataTable() {
                         <button
                           title="View vendor profile"
                           className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-150"
-                          onClick={(e) => { e.stopPropagation(); setDetailVendor(vendor); }}
+                          onClick={(e) => { e.stopPropagation(); router.push(`/vendor-management/${vendor.id}`); }}
                         >
                           <Eye size={13} />
                         </button>
