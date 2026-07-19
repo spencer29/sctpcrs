@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { createClient } from './client';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -65,6 +65,7 @@ export function useRealtimeIncidents() {
   const [timelineEvents, setTimelineEvents] = useState<DbTimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null);
 
   const fetchAll = useCallback(async () => {
     const supabase = createClient();
@@ -107,6 +108,13 @@ export function useRealtimeIncidents() {
   useEffect(() => {
     const supabase = createClient();
 
+    // Clean up any existing channel before creating a new one
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
     const incidentChannel = supabase
       .channel('incidents_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incidents' }, (payload) => {
@@ -139,8 +147,12 @@ export function useRealtimeIncidents() {
       })
       .subscribe();
 
+    channelRef.current = incidentChannel;
+
     return () => {
+      incidentChannel.unsubscribe();
       supabase.removeChannel(incidentChannel);
+      channelRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -153,6 +165,7 @@ export function useRealtimeAlerts() {
   const [alerts, setAlerts] = useState<DbAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null);
 
   const fetchAlerts = useCallback(async () => {
     const supabase = createClient();
@@ -184,6 +197,13 @@ export function useRealtimeAlerts() {
   useEffect(() => {
     const supabase = createClient();
 
+    // Clean up any existing channel before creating a new one
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
     const alertChannel = supabase
       .channel('alerts_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, (payload) => {
@@ -199,8 +219,12 @@ export function useRealtimeAlerts() {
       })
       .subscribe();
 
+    channelRef.current = alertChannel;
+
     return () => {
+      alertChannel.unsubscribe();
       supabase.removeChannel(alertChannel);
+      channelRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -227,6 +251,7 @@ export function useRealtimeCompliance() {
   const [frameworks, setFrameworks] = useState<DbComplianceFramework[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null);
 
   const fetchFrameworks = useCallback(async () => {
     const supabase = createClient();
@@ -258,6 +283,13 @@ export function useRealtimeCompliance() {
   useEffect(() => {
     const supabase = createClient();
 
+    // Clean up any existing channel before creating a new one
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
     const complianceChannel = supabase
       .channel('compliance_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'compliance_frameworks' }, (payload) => {
@@ -275,8 +307,12 @@ export function useRealtimeCompliance() {
       })
       .subscribe();
 
+    channelRef.current = complianceChannel;
+
     return () => {
+      complianceChannel.unsubscribe();
       supabase.removeChannel(complianceChannel);
+      channelRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
