@@ -98,9 +98,13 @@ export function useRealtimeIncidents() {
     }
   }, []);
 
+  // Initial fetch — re-runs only when fetchAll identity changes (stable)
   useEffect(() => {
     fetchAll();
+  }, [fetchAll]);
 
+  // Realtime subscription — empty deps so it only mounts/unmounts once
+  useEffect(() => {
     const supabase = createClient();
 
     const incidentChannel = supabase
@@ -138,7 +142,7 @@ export function useRealtimeIncidents() {
     return () => {
       supabase.removeChannel(incidentChannel);
     };
-  }, [fetchAll]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { incidents, timelineEvents, loading, error, refetch: fetchAll };
 }
@@ -171,9 +175,13 @@ export function useRealtimeAlerts() {
     }
   }, []);
 
+  // Initial fetch — re-runs only when fetchAlerts identity changes (stable)
   useEffect(() => {
     fetchAlerts();
+  }, [fetchAlerts]);
 
+  // Realtime subscription — empty deps so it only mounts/unmounts once
+  useEffect(() => {
     const supabase = createClient();
 
     const alertChannel = supabase
@@ -194,7 +202,7 @@ export function useRealtimeAlerts() {
     return () => {
       supabase.removeChannel(alertChannel);
     };
-  }, [fetchAlerts]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateAlertStatus = useCallback(
     async (ids: string[], status: DbAlert['status']) => {
@@ -241,9 +249,13 @@ export function useRealtimeCompliance() {
     }
   }, []);
 
+  // Initial fetch — re-runs only when fetchFrameworks identity changes (stable)
   useEffect(() => {
     fetchFrameworks();
+  }, [fetchFrameworks]);
 
+  // Realtime subscription — empty deps so it only mounts/unmounts once
+  useEffect(() => {
     const supabase = createClient();
 
     const complianceChannel = supabase
@@ -266,7 +278,7 @@ export function useRealtimeCompliance() {
     return () => {
       supabase.removeChannel(complianceChannel);
     };
-  }, [fetchFrameworks]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { frameworks, loading, error, refetch: fetchFrameworks };
 }
