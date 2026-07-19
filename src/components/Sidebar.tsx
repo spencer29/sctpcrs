@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import AppLogo from '@/components/ui/AppLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -148,6 +149,7 @@ interface SidebarProps {
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { canVisit, profile, role, roleDefinition, signOut, loading } = useAuth();
+  const router = useRouter();
 
   const groups = ['core', 'reporting', 'admin'];
 
@@ -180,6 +182,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const handleSignOut = async () => {
     try {
       await signOut();
+      router.push('/sign-up-login-screen');
     } catch {
       // ignore
     }
