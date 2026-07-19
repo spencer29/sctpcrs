@@ -1,13 +1,16 @@
 import React from 'react';
+import dynamic from 'next/dynamic';
 import AppLayout from '@/components/AppLayout';
 import KevAlertBanner from './components/KevAlertBanner';
-import MetricsBentoGrid from './components/MetricsBentoGrid';
-import VrsTrendChart from './components/VrsTrendChart';
-import RiskTierRadial from './components/RiskTierRadial';
-import ComplianceFrameworkBar from './components/ComplianceFrameworkBar';
-import AlertFeedPanel from './components/AlertFeedPanel';
-import TopRiskVendorsTable from './components/TopRiskVendorsTable';
-import ActivityFeed from './components/ActivityFeed';
+
+// Dynamically import heavy components to split into separate chunks
+const MetricsBentoGrid = dynamic(() => import('./components/MetricsBentoGrid'));
+const VrsTrendChart = dynamic(() => import('./components/VrsTrendChart'));
+const RiskTierRadial = dynamic(() => import('./components/RiskTierRadial'));
+const ComplianceFrameworkBar = dynamic(() => import('./components/ComplianceFrameworkBar'));
+const AlertFeedPanel = dynamic(() => import('./components/AlertFeedPanel'));
+const TopRiskVendorsTable = dynamic(() => import('./components/TopRiskVendorsTable'));
+const ActivityFeed = dynamic(() => import('./components/ActivityFeed'));
 
 export default function RiskOverviewDashboardPage() {
   return (
