@@ -2,15 +2,35 @@ import React from 'react';
 import dynamic from 'next/dynamic';
 import AppLayout from '@/components/AppLayout';
 import KevAlertBanner from './components/KevAlertBanner';
+import ChunkErrorBoundary from '@/components/ChunkErrorBoundary';
+
+// Skeleton placeholder for dynamic components
+const ComponentSkeleton = ({ height = 'h-48' }: { height?: string }) => (
+  <div className={`${height} w-full rounded-xl bg-muted/40 border border-border animate-pulse`} />
+);
 
 // Dynamically import heavy components to split into separate chunks
-const MetricsBentoGrid = dynamic(() => import('./components/MetricsBentoGrid'));
-const VrsTrendChart = dynamic(() => import('./components/VrsTrendChart'));
-const RiskTierRadial = dynamic(() => import('./components/RiskTierRadial'));
-const ComplianceFrameworkBar = dynamic(() => import('./components/ComplianceFrameworkBar'));
-const AlertFeedPanel = dynamic(() => import('./components/AlertFeedPanel'));
-const TopRiskVendorsTable = dynamic(() => import('./components/TopRiskVendorsTable'));
-const ActivityFeed = dynamic(() => import('./components/ActivityFeed'));
+const MetricsBentoGrid = dynamic(() => import('./components/MetricsBentoGrid'), {
+  loading: () => <ComponentSkeleton height="h-36" />,
+});
+const VrsTrendChart = dynamic(() => import('./components/VrsTrendChart'), {
+  loading: () => <ComponentSkeleton height="h-64" />,
+});
+const RiskTierRadial = dynamic(() => import('./components/RiskTierRadial'), {
+  loading: () => <ComponentSkeleton height="h-64" />,
+});
+const ComplianceFrameworkBar = dynamic(() => import('./components/ComplianceFrameworkBar'), {
+  loading: () => <ComponentSkeleton />,
+});
+const AlertFeedPanel = dynamic(() => import('./components/AlertFeedPanel'), {
+  loading: () => <ComponentSkeleton />,
+});
+const TopRiskVendorsTable = dynamic(() => import('./components/TopRiskVendorsTable'), {
+  loading: () => <ComponentSkeleton height="h-56" />,
+});
+const ActivityFeed = dynamic(() => import('./components/ActivityFeed'), {
+  loading: () => <ComponentSkeleton height="h-56" />,
+});
 
 export default function RiskOverviewDashboardPage() {
   return (
@@ -40,31 +60,45 @@ export default function RiskOverviewDashboardPage() {
         <KevAlertBanner />
 
         {/* KPI Bento Grid */}
-        <MetricsBentoGrid />
+        <ChunkErrorBoundary>
+          <MetricsBentoGrid />
+        </ChunkErrorBoundary>
 
         {/* Charts row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-3 gap-5">
           <div className="lg:col-span-2">
-            <VrsTrendChart />
+            <ChunkErrorBoundary>
+              <VrsTrendChart />
+            </ChunkErrorBoundary>
           </div>
           <div className="lg:col-span-1">
-            <RiskTierRadial />
+            <ChunkErrorBoundary>
+              <RiskTierRadial />
+            </ChunkErrorBoundary>
           </div>
         </div>
 
         {/* Compliance + Alerts row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-2 gap-5">
-          <ComplianceFrameworkBar />
-          <AlertFeedPanel />
+          <ChunkErrorBoundary>
+            <ComplianceFrameworkBar />
+          </ChunkErrorBoundary>
+          <ChunkErrorBoundary>
+            <AlertFeedPanel />
+          </ChunkErrorBoundary>
         </div>
 
         {/* Bottom row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-3 gap-5">
           <div className="lg:col-span-2">
-            <TopRiskVendorsTable />
+            <ChunkErrorBoundary>
+              <TopRiskVendorsTable />
+            </ChunkErrorBoundary>
           </div>
           <div className="lg:col-span-1">
-            <ActivityFeed />
+            <ChunkErrorBoundary>
+              <ActivityFeed />
+            </ChunkErrorBoundary>
           </div>
         </div>
       </div>

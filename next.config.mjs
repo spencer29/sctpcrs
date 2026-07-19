@@ -43,6 +43,8 @@ const nextConfig = {
     // Increase chunk load timeout to prevent ChunkLoadError on slow networks
     if (config.output) {
       config.output.chunkLoadTimeout = 120000;
+    } else {
+      config.output = { chunkLoadTimeout: 120000 };
     }
 
     return config;
