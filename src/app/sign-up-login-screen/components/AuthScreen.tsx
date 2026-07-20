@@ -49,9 +49,23 @@ export default function AuthScreen() {
         // Partial sign-in (MFA challenge pending) — redirect to MFA screen
         router.push('/mfa-verify');
       }
-    } catch {
-      // Generic error — never reveal whether username or password was wrong
-      setError('Authentication failed. Please check your credentials and try again.');
+    } catch (err: unknown) {
+      // Surface the actual error message to help diagnose issues
+      const message =
+        err instanceof Error ? err.message : 'Authentication failed. Please check your credentials and try again.';
+      // Map common Supabase auth error messages to user-friendly text
+      if (
+        message.toLowerCase().includes('invalid login credentials') ||
+        message.toLowerCase().includes('invalid email or password')
+      ) {
+        setError('Invalid email or password. Please try again.');
+      } else if (message.toLowerCase().includes('email not confirmed')) {
+        setError('Your email address has not been confirmed. Please check your inbox.');
+      } else if (message.toLowerCase().includes('too many requests')) {
+        setError('Too many login attempts. Please wait a moment and try again.');
+      } else {
+        setError(message);
+      }
     } finally {
       setIsLoading(false);
     }
