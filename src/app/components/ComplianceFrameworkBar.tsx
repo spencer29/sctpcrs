@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   BarChart,
   Bar,
@@ -11,15 +11,16 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
+import { createClient } from '@/lib/supabase/client';
+import { Loader2 } from 'lucide-react';
 
-// Backend integration point: GET /api/v1/compliance/dashboard/portfolio
-const complianceData = [
-  { framework: 'CBN 2021', coverage: 78, gap: 22, controls: 32, evidenced: 25 },
-  { framework: 'PCI DSS v4', coverage: 65, gap: 35, controls: 28, evidenced: 18 },
-  { framework: 'ISO 27001', coverage: 71, gap: 29, controls: 41, evidenced: 29 },
-  { framework: 'NIST CSF', coverage: 82, gap: 18, controls: 19, evidenced: 16 },
-  { framework: 'NDPA 2023', coverage: 59, gap: 41, controls: 14, evidenced: 8 },
-];
+interface ComplianceChartData {
+  framework: string;
+  coverage: number;
+  gap: number;
+  controls: number;
+  evidenced: number;
+}
 
 const getBarColor = (coverage: number) => {
   if (coverage >= 80) return 'var(--status-low)';
@@ -50,6 +51,44 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function ComplianceFrameworkBar() {
+  const [complianceData, setComplianceData] = useState<ComplianceChartData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    const supabase = createClient();
+    try {
+      const { data, error } = await supabase
+        .from('compliance_frameworks')
+        .select('short_name, overall_score, compliant, total_vendors, non_compliant, partial')
+        .order('overall_score', { ascending: false });
+
+      if (error || !data) return;
+
+      const chartData: ComplianceChartData[] = data.map((fw) => {
+        const coverage = fw.overall_score || 0;
+        const totalVendors = fw.total_vendors || 1;
+        const evidenced = fw.compliant || 0;
+        return {
+          framework: fw.short_name,
+          coverage,
+          gap: 100 - coverage,
+          controls: totalVendors,
+          evidenced,
+        };
+      });
+
+      setComplianceData(chartData);
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
   return (
     <div className="card-elevated p-5">
       <div className="flex items-center justify-between mb-4">
@@ -61,30 +100,36 @@ export default function ComplianceFrameworkBar() {
           View Gap Report →
         </button>
       </div>
-      <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={complianceData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barSize={28}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal vertical={false} />
-          <XAxis
-            dataKey="framework"
-            tick={{ fontSize: 10, fill: 'var(--muted-foreground)', fontFamily: 'var(--font-mono)' }}
-            tickLine={false}
-            axisLine={false}
-          />
-          <YAxis
-            domain={[0, 100]}
-            tick={{ fontSize: 10, fill: 'var(--muted-foreground)', fontFamily: 'var(--font-mono)' }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(v) => `${v}%`}
-          />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,212,255,0.04)' }} />
-          <Bar dataKey="coverage" radius={[4, 4, 0, 0]}>
-            {complianceData.map((entry) => (
-              <Cell key={`cell-framework-${entry.framework}`} fill={getBarColor(entry.coverage)} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      {loading ? (
+        <div className="flex items-center justify-center h-[200px]">
+          <Loader2 size={20} className="animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={complianceData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barSize={28}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal vertical={false} />
+            <XAxis
+              dataKey="framework"
+              tick={{ fontSize: 10, fill: 'var(--muted-foreground)', fontFamily: 'var(--font-mono)' }}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              domain={[0, 100]}
+              tick={{ fontSize: 10, fill: 'var(--muted-foreground)', fontFamily: 'var(--font-mono)' }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v) => `${v}%`}
+            />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,212,255,0.04)' }} />
+            <Bar dataKey="coverage" radius={[4, 4, 0, 0]}>
+              {complianceData.map((entry) => (
+                <Cell key={`cell-framework-${entry.framework}`} fill={getBarColor(entry.coverage)} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }

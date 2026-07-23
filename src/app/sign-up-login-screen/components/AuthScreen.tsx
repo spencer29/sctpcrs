@@ -1,849 +1,559 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { toast } from 'sonner';
-import AppLogo from '@/components/ui/AppLogo';
-import {
-  Eye,
-  EyeOff,
-  Shield,
-  ShieldCheck,
-  Lock,
-  Mail,
-  ArrowRight,
-  Copy,
-  CheckCircle,
-  AlertTriangle,
-  Smartphone,
-  ChevronLeft,
-  Building2,
-  Globe,
-  FileText,
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShieldAlert, User, Lock, Eye, EyeOff, Loader2, UserPlus, ChevronDown } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
-type AuthMode = 'login' | 'signup';
-type AuthStep = 'credentials' | 'mfa';
+type AuthTab = 'login' | 'signup';
 
-interface LoginFormValues {
-  email: string;
-  password: string;
-  rememberMe: boolean;
+interface Team {
+  id: string;
+  name: string;
+  team_type: string;
 }
 
-interface SignupFormValues {
-  fullName: string;
-  email: string;
-  organisation: string;
-  role: string;
-  password: string;
-  confirmPassword: string;
-  agreeTerms: boolean;
-}
+const SIGNUP_ROLES = [
+  { value: 'analyst',      label: 'Analyst',      desc: 'Create & edit core resources, escalate incidents' },
+  { value: 'risk_officer', label: 'Risk Officer',  desc: 'Broad access, approve & escalate across resources' },
+  { value: 'admin',        label: 'Admin',         desc: 'Full platform access — manage users, roles & teams' },
+] as const;
 
-interface MfaFormValues {
-  totp: string;
-}
-
-const demoCredentials = [
-  {
-    id: 'cred-admin',
-    role: 'ADMIN',
-    label: 'System Administrator',
-    email: 'admin@sctpcrs.ng',
-    password: 'SC-Admin#2026',
-    description: 'Full system access, user management, audit logs',
-    badgeClass: 'badge-critical',
-  },
-  {
-    id: 'cred-risk',
-    role: 'RISK_OFFICER',
-    label: 'Risk Officer',
-    email: 'risk.officer@sctpcrs.ng',
-    password: 'SC-Risk#2026',
-    description: 'Vendor management, assessments, incident declaration',
-    badgeClass: 'badge-high',
-  },
-  {
-    id: 'cred-compliance',
-    role: 'COMPLIANCE_ANALYST',
-    label: 'Compliance Analyst',
-    email: 'compliance@sctpcrs.ng',
-    password: 'SC-Comply#2026',
-    description: 'Compliance evidence, control mappings, reports',
-    badgeClass: 'badge-medium',
-  },
-  {
-    id: 'cred-analyst',
-    role: 'ANALYST',
-    label: 'Security Analyst',
-    email: 'analyst@sctpcrs.ng',
-    password: 'SC-Analyst#2026',
-    description: 'Read-only access to dashboards and risk scores',
-    badgeClass: 'badge-info',
-  },
-  {
-    id: 'cred-viewer',
-    role: 'VIEWER',
-    label: 'Executive Viewer',
-    email: 'executive@sctpcrs.ng',
-    password: 'SC-Exec#2026',
-    description: 'Executive dashboard and report access only',
-    badgeClass: 'badge-low',
-  },
-];
-
-const MOCK_TOTP = '482913';
+type SignupRole = typeof SIGNUP_ROLES[number]['value'];
 
 export default function AuthScreen() {
-  const [mode, setMode] = useState<AuthMode>('login');
-  const [step, setStep] = useState<AuthStep>('credentials');
+  const [tab, setTab] = useState<AuthTab>('login');
+
+  // Login state
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [pendingEmail, setPendingEmail] = useState('');
-  const [authError, setAuthError] = useState('');
+  const [error, setError] = useState('');
 
-  const loginForm = useForm<LoginFormValues>({
-    defaultValues: { email: '', password: '', rememberMe: false },
-  });
+  // Signup state
+  const [signupFullName, setSignupFullName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupConfirm, setSignupConfirm] = useState('');
+  const [signupRole, setSignupRole] = useState<SignupRole>('analyst');
+  const [signupTeamId, setSignupTeamId] = useState('');
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [isSigningUp, setIsSigningUp] = useState(false);
+  const [signupError, setSignupError] = useState('');
+  const [signupSuccess, setSignupSuccess] = useState(false);
 
-  const signupForm = useForm<SignupFormValues>({
-    defaultValues: {
-      fullName: '',
-      email: '',
-      organisation: '',
-      role: 'ANALYST',
-      password: '',
-      confirmPassword: '',
-      agreeTerms: false,
-    },
-  });
+  // Teams list
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamsLoading, setTeamsLoading] = useState(false);
 
-  const mfaForm = useForm<MfaFormValues>({
-    defaultValues: { totp: '' },
-  });
+  const router = useRouter();
+  const supabase = createClient();
 
-  const handleCopy = (text: string, fieldId: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedField(fieldId);
-      setTimeout(() => setCopiedField(null), 2000);
-    });
+  // Fetch teams when signup tab is active
+  useEffect(() => {
+    if (tab !== 'signup' || teams.length > 0) return;
+    setTeamsLoading(true);
+    supabase
+      .from('teams')
+      .select('id, name, team_type')
+      .order('name')
+      .then(({ data }) => {
+        setTeams(data ?? []);
+        if (data && data.length > 0) setSignupTeamId(data[0].id);
+      })
+      .finally(() => setTeamsLoading(false));
+  }, [tab, supabase, teams.length]);
+
+  // ── Login ──────────────────────────────────────────────────
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim() || !password.trim()) {
+      setError('Please enter your username and password.');
+      return;
+    }
+    setError('');
+    setIsLoading(true);
+    try {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: username.trim(),
+        password: password.trim(),
+      });
+      if (signInError) throw signInError;
+
+      if (data?.session) {
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aal?.nextLevel === 'aal2' || (aal?.currentLevel === 'aal1' && aal?.nextLevel === 'aal2')) {
+          router.push('/mfa-verify');
+        } else {
+          router.push('/');
+        }
+      } else {
+        router.push('/mfa-verify');
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Authentication failed. Please check your credentials and try again.';
+      if (message.toLowerCase().includes('invalid login credentials') || message.toLowerCase().includes('invalid email or password')) {
+        setError('Invalid email or password. Please try again.');
+      } else if (message.toLowerCase().includes('email not confirmed')) {
+        setError('Your email address has not been confirmed. Please check your inbox.');
+      } else if (message.toLowerCase().includes('too many requests')) {
+        setError('Too many login attempts. Please wait a moment and try again.');
+      } else {
+        setError(message);
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleCredentialClick = (cred: typeof demoCredentials[0]) => {
-    loginForm.setValue('email', cred.email);
-    loginForm.setValue('password', cred.password);
-    setAuthError('');
-    toast.info(`Credentials filled for ${cred.label}`);
+  // ── Sign Up ────────────────────────────────────────────────
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignupError('');
+
+    if (!signupFullName.trim()) { setSignupError('Full name is required.'); return; }
+    if (!signupEmail.trim()) { setSignupError('Email is required.'); return; }
+    if (signupPassword.length < 8) { setSignupError('Password must be at least 8 characters.'); return; }
+    if (signupPassword !== signupConfirm) { setSignupError('Passwords do not match.'); return; }
+
+    setIsSigningUp(true);
+    try {
+      // 1. Create auth user — trigger will auto-create user_profiles row
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: signupEmail.trim(),
+        password: signupPassword,
+        options: {
+          data: {
+            full_name: signupFullName.trim(),
+            role: signupRole,
+            department: '',
+            job_title: '',
+          },
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? (typeof window !== 'undefined' ? window.location.origin : '')}/auth/callback`,
+        },
+      });
+      if (signUpError) throw signUpError;
+
+      // 2. If a team was selected and we have a session, insert team membership
+      if (signupTeamId && data.user) {
+        // Wait briefly for the trigger to create the user_profiles row
+        await new Promise((r) => setTimeout(r, 800));
+
+        const { error: memberError } = await supabase
+          .from('team_members')
+          .insert({ team_id: signupTeamId, user_id: data.user.id })
+          .select()
+          .single();
+
+        // Non-fatal: team assignment may fail if email confirmation is pending
+        if (memberError && !memberError.message.includes('not authenticated')) {
+          console.warn('Team assignment deferred:', memberError.message);
+        }
+      }
+
+      setSignupSuccess(true);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Sign-up failed. Please try again.';
+      if (message.toLowerCase().includes('already registered') || message.toLowerCase().includes('already exists')) {
+        setSignupError('An account with this email already exists. Please sign in.');
+      } else if (message.toLowerCase().includes('password')) {
+        setSignupError('Password is too weak. Use at least 8 characters with mixed case and numbers.');
+      } else {
+        setSignupError(message);
+      }
+    } finally {
+      setIsSigningUp(false);
+    }
   };
 
-  const handleLoginSubmit = loginForm.handleSubmit(async (data) => {
-    setAuthError('');
-    setIsLoading(true);
-    // Backend integration point: POST /api/v1/auth/login → Keycloak OAuth2 token endpoint
-    await new Promise((r) => setTimeout(r, 1200));
-
-    const validCred = demoCredentials.find(
-      (c) => c.email === data.email && c.password === data.password
-    );
-
-    if (!validCred) {
-      setIsLoading(false);
-      setAuthError('Invalid credentials — use the demo accounts below to sign in');
-      return;
-    }
-
-    setPendingEmail(data.email);
-    setIsLoading(false);
-    setStep('mfa');
-  });
-
-  const handleMfaSubmit = mfaForm.handleSubmit(async (data) => {
-    setIsLoading(true);
-    // Backend integration point: POST /api/v1/auth/mfa/verify → TOTP validation
-    await new Promise((r) => setTimeout(r, 900));
-
-    if (data.totp !== MOCK_TOTP) {
-      mfaForm.setError('totp', { message: 'Invalid TOTP code — check your authenticator app' });
-      setIsLoading(false);
-      return;
-    }
-
-    toast.success('Authentication successful — redirecting to dashboard');
-    setIsLoading(false);
-    // Backend integration point: redirect to /risk-overview-dashboard after session established
-    setTimeout(() => { window.location.href = '/'; }, 1000);
-  });
-
-  const handleSignupSubmit = signupForm.handleSubmit(async (data) => {
-    if (data.password !== data.confirmPassword) {
-      signupForm.setError('confirmPassword', { message: 'Passwords do not match' });
-      return;
-    }
-    setIsLoading(true);
-    // Backend integration point: POST /api/v1/auth/register → auth-service user creation
-    await new Promise((r) => setTimeout(r, 1400));
-    setIsLoading(false);
-    toast.success('Account request submitted — an administrator will activate your account within 24 hours');
-    setMode('login');
-  });
+  // ── Shared input style helpers ─────────────────────────────
+  const inputBase =
+    'w-full rounded-lg py-3 text-sm text-white placeholder-gray-500 outline-none transition-all duration-200';
+  const inputStyle = { backgroundColor: '#0B1120', border: '1px solid #1E293B' };
+  const onFocus = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+    e.currentTarget.style.borderColor = '#3B82F6';
+    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.15)';
+  };
+  const onBlur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+    e.currentTarget.style.borderColor = '#1E293B';
+    e.currentTarget.style.boxShadow = 'none';
+  };
 
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* Left brand panel */}
-      <div className="hidden lg:flex lg:w-[52%] xl:w-[55%] flex-col justify-between p-10 xl:p-14 relative overflow-hidden bg-card border-r border-border">
-        {/* Background grid */}
-        <div className="absolute inset-0 cyber-grid opacity-60" />
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-12 relative overflow-hidden"
+      style={{ backgroundColor: '#0A0E1A' }}
+    >
+      {/* Tactical grid background */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: `
+            linear-gradient(rgba(30,41,59,0.12) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(30,41,59,0.12) 1px, transparent 1px)
+          `,
+          backgroundSize: '44px 44px',
+        }}
+      />
 
-        {/* Glow orb */}
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(0,212,255,0.08) 0%, transparent 70%)' }}
-        />
+      <div className="relative z-10 w-full max-w-[440px] flex flex-col items-center">
 
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-12">
-            <AppLogo size={40} />
-            <div>
-              <span className="font-bold text-lg text-foreground tracking-tight">SC-TPCRS</span>
-              <p className="text-2xs text-muted-foreground tracking-widest uppercase">Supply Chain & Third-Party Cyber Risk</p>
-            </div>
+        {/* Header block */}
+        <div className="flex flex-col items-center mb-8">
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5"
+            style={{
+              backgroundColor: '#0F172A',
+              border: '1px solid rgba(59,130,246,0.45)',
+              boxShadow: '0 0 18px rgba(59,130,246,0.25), 0 0 6px rgba(59,130,246,0.15)',
+            }}
+          >
+            <ShieldAlert size={30} style={{ color: '#60A5FA' }} />
           </div>
-
-          <div className="space-y-6 max-w-lg">
-            <div>
-              <h1 className="text-3xl xl:text-4xl font-bold text-foreground leading-tight tracking-tight">
-                Vendor Risk Intelligence{' '}
-                <span className="text-gradient-cyan">for Fintech</span>
-              </h1>
-              <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
-                Automated VRS scoring, SBOM vulnerability analysis, and real-time compliance monitoring
-                across CBN, PCI DSS v4.0, ISO 27001, and NDPA 2023 — all in one platform.
-              </p>
-            </div>
-
-            {/* Feature list */}
-            <div className="space-y-3">
-              {[
-                {
-                  id: 'feat-vrs',
-                  icon: <Shield size={15} />,
-                  title: 'Composite Vendor Risk Score (VRS)',
-                  desc: '7-signal automated scoring updated daily with NVD, MISP, and CISA KEV feeds',
-                },
-                {
-                  id: 'feat-sbom',
-                  icon: <FileText size={15} />,
-                  title: 'SBOM Vulnerability Analysis',
-                  desc: 'SPDX 2.3 and CycloneDX 1.5 ingestion with transitive dependency graph',
-                },
-                {
-                  id: 'feat-compliance',
-                  icon: <ShieldCheck size={15} />,
-                  title: 'Multi-Framework Compliance',
-                  desc: 'Automated control mapping across CBN, PCI DSS v4.0, ISO 27001, NIST CSF 2.0',
-                },
-                {
-                  id: 'feat-monitoring',
-                  icon: <Globe size={15} />,
-                  title: 'Continuous Threat Monitoring',
-                  desc: 'Real-time IOC matching, dark web monitoring, and automated re-scoring',
-                },
-              ].map((feat) => (
-                <div key={feat.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/40 border border-border/50">
-                  <div className="w-7 h-7 rounded-md bg-primary/20 flex items-center justify-center text-primary flex-shrink-0 mt-0.5">
-                    {feat.icon}
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-foreground">{feat.title}</p>
-                    <p className="text-2xs text-muted-foreground mt-0.5 leading-relaxed">{feat.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <h1 className="font-bold text-white text-center mb-1" style={{ fontSize: '30px', letterSpacing: '-0.02em' }}>
+            SC-TPCRS
+          </h1>
+          <p className="text-center text-sm" style={{ color: '#94A3B8' }}>
+            Supply Chain &amp; Third-Party Cybersecurity Risk System
+          </p>
         </div>
 
-        {/* Compliance badges */}
-        <div className="relative z-10">
-          <p className="text-2xs text-muted-foreground uppercase tracking-widest mb-3 font-semibold">Regulatory Compliance</p>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { id: 'badge-cbn', label: 'CBN 2021', color: 'text-primary bg-primary/10 border-primary/30' },
-              { id: 'badge-pci', label: 'PCI DSS v4.0', color: 'badge-high' },
-              { id: 'badge-iso', label: 'ISO 27001:2022', color: 'badge-info' },
-              { id: 'badge-nist', label: 'NIST CSF 2.0', color: 'badge-medium' },
-              { id: 'badge-ndpa', label: 'NDPA 2023', color: 'badge-low' },
-            ].map((b) => (
-              <span key={b.id} className={`text-2xs font-mono-data font-semibold px-2 py-1 rounded border ${b.color}`}>
-                {b.label}
-              </span>
+        {/* Card */}
+        <div
+          className="w-full rounded-2xl"
+          style={{
+            backgroundColor: '#111827',
+            border: '1px solid #1E293B',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
+          }}
+        >
+          {/* Tab switcher */}
+          <div className="flex" style={{ borderBottom: '1px solid #1E293B' }}>
+            {(['login', 'signup'] as AuthTab[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => { setTab(t); setError(''); setSignupError(''); setSignupSuccess(false); }}
+                className="flex-1 py-4 text-sm font-semibold transition-colors duration-200 focus:outline-none"
+                style={{
+                  color: tab === t ? '#60A5FA' : '#475569',
+                  borderBottom: tab === t ? '2px solid #3B82F6' : '2px solid transparent',
+                  backgroundColor: 'transparent',
+                }}
+              >
+                {t === 'login' ? 'Sign In' : 'Create Account'}
+              </button>
             ))}
           </div>
-          <div className="flex items-center gap-3 mt-4">
-            <div className="flex items-center gap-1.5 text-2xs text-muted-foreground">
-              <Lock size={11} className="text-status-low" />
-              <span>TLS 1.3 encrypted</span>
-            </div>
-            <span className="text-muted-foreground">·</span>
-            <div className="flex items-center gap-1.5 text-2xs text-muted-foreground">
-              <Smartphone size={11} className="text-primary" />
-              <span>MFA mandatory — PCI DSS Req 8.4</span>
-            </div>
-            <span className="text-muted-foreground">·</span>
-            <div className="flex items-center gap-1.5 text-2xs text-muted-foreground">
-              <Building2 size={11} className="text-status-info" />
-              <span>CBN Framework compliant</span>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Right auth panel */}
-      <div className="flex-1 flex flex-col justify-center px-6 py-10 sm:px-10 lg:px-12 xl:px-16 overflow-y-auto">
-        <div className="w-full max-w-md mx-auto">
-          {/* Mobile logo */}
-          <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <AppLogo size={32} />
-            <span className="font-bold text-foreground">SC-TPCRS</span>
-          </div>
+          <div className="p-9">
 
-          {/* Step indicator */}
-          {step === 'mfa' && (
-            <div className="mb-6">
-              <button
-                onClick={() => { setStep('credentials'); mfaForm.reset(); }}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-4"
-              >
-                <ChevronLeft size={14} /> Back to sign in
-              </button>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-6 h-6 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center">
-                    <CheckCircle size={12} className="text-primary" />
-                  </div>
-                  <span className="text-2xs text-muted-foreground">Credentials</span>
-                </div>
-                <div className="h-px w-8 bg-primary/30" />
-                <div className="flex items-center gap-1.5">
-                  <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-                    <span className="text-2xs font-bold text-primary-foreground">2</span>
-                  </div>
-                  <span className="text-2xs text-primary font-medium">MFA Verification</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Mode toggle — only on credentials step */}
-          {step === 'credentials' && (
-            <div className="flex items-center gap-1 p-1 rounded-lg bg-muted border border-border mb-6">
-              {(['login', 'signup'] as AuthMode[]).map((m) => (
-                <button
-                  key={`mode-${m}`}
-                  onClick={() => { setMode(m); setAuthError(''); loginForm.reset(); signupForm.reset(); }}
-                  className={`flex-1 py-2 px-3 rounded-md text-xs font-semibold transition-all duration-150 ${
-                    mode === m
-                      ? 'bg-card text-foreground shadow-sm border border-border'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {m === 'login' ? 'Sign In' : 'Request Access'}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* ─── MFA STEP ─── */}
-          {step === 'mfa' && (
-            <div className="space-y-6 fade-in">
-              <div>
-                <h2 className="text-xl font-bold text-foreground">Multi-Factor Authentication</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Enter the 6-digit code from your authenticator app for{' '}
-                  <span className="text-primary font-mono-data text-xs">{pendingEmail}</span>
-                </p>
-              </div>
-
-              {/* MFA notice */}
-              <div className="flex items-start gap-2.5 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                <Smartphone size={14} className="text-primary flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs font-semibold text-primary">TOTP Required — PCI DSS Req 8.4</p>
-                  <p className="text-2xs text-muted-foreground mt-0.5">
-                    MFA is mandatory for all SC-TPCRS users per CBN Risk-Based Cybersecurity Framework §4.3.
-                    Use Google Authenticator, Authy, or any TOTP-compatible app.
+            {/* ── LOGIN FORM ── */}
+            {tab === 'login' && (
+              <>
+                <div className="mb-7">
+                  <h2 className="font-bold text-white text-xl mb-1">Administrator Login</h2>
+                  <p className="text-sm" style={{ color: '#60A5FA' }}>
+                    Restricted access — authorised personnel only
                   </p>
                 </div>
-              </div>
 
-              {/* Demo TOTP hint */}
-              <div className="flex items-center justify-between p-3 rounded-lg bg-muted border border-border">
-                <div>
-                  <p className="text-2xs text-muted-foreground font-semibold uppercase tracking-wider">Demo TOTP Code</p>
-                  <p className="font-mono-data text-xl font-bold text-primary tracking-widest mt-1">{MOCK_TOTP}</p>
-                </div>
-                <button
-                  onClick={() => { mfaForm.setValue('totp', MOCK_TOTP); toast.info('TOTP code filled'); }}
-                  className="text-2xs text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20 px-2.5 py-1.5 rounded transition-all"
-                >
-                  Use code
-                </button>
-              </div>
-
-              <form onSubmit={handleMfaSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">
-                    6-Digit TOTP Code
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="000000"
-                    {...mfaForm.register('totp', {
-                      required: 'TOTP code is required',
-                      pattern: { value: /^\d{6}$/, message: 'Must be exactly 6 digits' },
-                    })}
-                    className="w-full bg-input border border-border rounded-md px-4 py-3 text-center text-2xl font-mono-data font-bold text-foreground tracking-widest placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary/50 transition-all"
-                  />
-                  {mfaForm.formState.errors.totp && (
-                    <p className="text-xs text-status-critical mt-1.5 flex items-center gap-1">
-                      <AlertTriangle size={11} />
-                      {mfaForm.formState.errors.totp.message}
-                    </p>
-                  )}
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150 active:scale-[0.99]"
-                  style={{ minHeight: '42px' }}
-                >
-                  {isLoading ? (
-                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                  ) : (
-                    <>
-                      Verify & Access Platform
-                      <ArrowRight size={15} />
-                    </>
-                  )}
-                </button>
-              </form>
-
-              <p className="text-2xs text-muted-foreground text-center">
-                Lost access to your authenticator?{' '}
-                <button className="text-primary hover:underline">Contact your administrator</button>
-              </p>
-            </div>
-          )}
-
-          {/* ─── LOGIN FORM ─── */}
-          {step === 'credentials' && mode === 'login' && (
-            <div className="space-y-5 fade-in">
-              <div>
-                <h2 className="text-xl font-bold text-foreground">Sign in to SC-TPCRS</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Access your risk management dashboard — MFA required after sign-in.
-                </p>
-              </div>
-
-              {/* Auth error */}
-              {authError && (
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-status-critical-bg border border-status-critical/40 fade-in">
-                  <AlertTriangle size={13} className="text-status-critical flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-status-critical">{authError}</p>
-                </div>
-              )}
-
-              <form onSubmit={handleLoginSubmit} className="space-y-4">
-                {/* Email */}
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">
-                    Work Email Address
-                  </label>
-                  <div className="relative">
-                    <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="email"
-                      placeholder="you@yourorg.ng"
-                      {...loginForm.register('email', {
-                        required: 'Email address is required',
-                        pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Enter a valid email address' },
-                      })}
-                      className="w-full bg-input border border-border rounded-md pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary/50 transition-all"
-                    />
+                <form onSubmit={handleLogin} noValidate>
+                  {/* Username */}
+                  <div className="mb-5">
+                    <label htmlFor="username" className="block text-xs font-semibold mb-2 tracking-widest uppercase" style={{ color: '#60A5FA' }}>
+                      Username
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#64748B' }}>
+                        <User size={17} />
+                      </span>
+                      <input
+                        id="username" type="text" autoComplete="username" aria-label="Username"
+                        placeholder="Enter username" value={username}
+                        onChange={(e) => { setUsername(e.target.value); setError(''); }}
+                        className={`${inputBase} pl-10 pr-4`} style={inputStyle}
+                        onFocus={onFocus} onBlur={onBlur} disabled={isLoading}
+                      />
+                    </div>
                   </div>
-                  {loginForm.formState.errors.email && (
-                    <p className="text-xs text-status-critical mt-1.5 flex items-center gap-1">
-                      <AlertTriangle size={11} />
-                      {loginForm.formState.errors.email.message}
-                    </p>
+
+                  {/* Password */}
+                  <div className="mb-6">
+                    <label htmlFor="password" className="block text-xs font-semibold mb-2 tracking-widest uppercase" style={{ color: '#60A5FA' }}>
+                      Password
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#64748B' }}>
+                        <Lock size={17} />
+                      </span>
+                      <input
+                        id="password" type={showPassword ? 'text' : 'password'}
+                        autoComplete="current-password" aria-label="Password"
+                        placeholder="Enter password" value={password}
+                        onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                        className={`${inputBase} pl-10 pr-11`} style={inputStyle}
+                        onFocus={onFocus} onBlur={onBlur} disabled={isLoading}
+                      />
+                      <button
+                        type="button" aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                        style={{ color: '#64748B' }} tabIndex={0}
+                      >
+                        {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {error && (
+                    <p className="text-xs mb-4 text-center" style={{ color: '#F87171' }} role="alert">{error}</p>
                   )}
+
+                  <button
+                    type="submit" disabled={isLoading}
+                    className="w-full rounded-lg py-3 font-semibold text-white text-sm transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
+                    style={{ backgroundColor: isLoading ? '#1e3a6e' : '#2563EB', opacity: isLoading ? 0.7 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }}
+                    onMouseEnter={(e) => { if (!isLoading) e.currentTarget.style.backgroundColor = '#1D4ED8'; }}
+                    onMouseLeave={(e) => { if (!isLoading) e.currentTarget.style.backgroundColor = '#2563EB'; }}
+                  >
+                    {isLoading ? (<><Loader2 size={16} className="animate-spin" />Authenticating…</>) : 'Sign In'}
+                  </button>
+
+                  <div className="mt-7 pt-5" style={{ borderTop: '1px solid #1E293B' }}>
+                    <p className="text-xs text-center leading-relaxed" style={{ color: '#3B82F6' }}>
+                      This system is restricted to authorised users only. All access attempts are logged
+                      and monitored in accordance with the CBN Risk-Based Cybersecurity Framework.
+                    </p>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {/* ── SIGNUP FORM ── */}
+            {tab === 'signup' && (
+              <>
+                <div className="mb-7">
+                  <h2 className="font-bold text-white text-xl mb-1">Create Account</h2>
+                  <p className="text-sm" style={{ color: '#60A5FA' }}>
+                    Register with your role and team assignment
+                  </p>
                 </div>
 
-                {/* Password */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-semibold text-foreground">Password</label>
-                    <button type="button" className="text-2xs text-primary hover:underline">
-                      Forgot password?
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="Your password"
-                      {...loginForm.register('password', {
-                        required: 'Password is required',
-                        minLength: { value: 8, message: 'Password must be at least 8 characters' },
-                      })}
-                      className="w-full bg-input border border-border rounded-md pl-9 pr-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary/50 transition-all"
-                    />
+                {signupSuccess ? (
+                  <div
+                    className="rounded-xl p-6 text-center"
+                    style={{ backgroundColor: '#0F2A1A', border: '1px solid rgba(34,197,94,0.3)' }}
+                  >
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: 'rgba(34,197,94,0.15)' }}>
+                      <UserPlus size={22} style={{ color: '#22C55E' }} />
+                    </div>
+                    <p className="font-semibold text-white mb-2">Account Created</p>
+                    <p className="text-sm" style={{ color: '#86EFAC' }}>
+                      Check your inbox to confirm your email, then sign in with your credentials.
+                    </p>
                     <button
                       type="button"
-                      onClick={() => setShowPassword((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={() => { setTab('login'); setSignupSuccess(false); }}
+                      className="mt-5 w-full rounded-lg py-2.5 text-sm font-semibold text-white transition-colors duration-200"
+                      style={{ backgroundColor: '#166534' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#15803D'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#166534'; }}
                     >
-                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                      Go to Sign In
                     </button>
                   </div>
-                  {loginForm.formState.errors.password && (
-                    <p className="text-xs text-status-critical mt-1.5 flex items-center gap-1">
-                      <AlertTriangle size={11} />
-                      {loginForm.formState.errors.password.message}
-                    </p>
-                  )}
-                </div>
+                ) : (
+                  <form onSubmit={handleSignup} noValidate className="space-y-5">
 
-                {/* Remember me */}
-                <div className="flex items-center gap-2">
-                  <input
-                    id="rememberMe"
-                    type="checkbox"
-                    {...loginForm.register('rememberMe')}
-                    className="w-3.5 h-3.5 rounded border-border bg-input accent-primary"
-                  />
-                  <label htmlFor="rememberMe" className="text-xs text-muted-foreground cursor-pointer">
-                    Keep me signed in for 8 hours
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150 active:scale-[0.99]"
-                  style={{ minHeight: '42px' }}
-                >
-                  {isLoading ? (
-                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                  ) : (
-                    <>
-                      Sign In
-                      <ArrowRight size={15} />
-                    </>
-                  )}
-                </button>
-              </form>
-
-              {/* Security notice */}
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 border border-border">
-                <Shield size={13} className="text-primary flex-shrink-0 mt-0.5" />
-                <p className="text-2xs text-muted-foreground leading-relaxed">
-                  All sessions require TOTP multi-factor authentication per{' '}
-                  <span className="text-foreground font-medium">PCI DSS Req 8.4</span> and{' '}
-                  <span className="text-foreground font-medium">CBN Cybersecurity Framework §4.3</span>.
-                  Accounts lock after 5 failed attempts.
-                </p>
-              </div>
-
-              {/* Demo credentials table */}
-              <div className="space-y-2">
-                <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Demo Credentials — Click to autofill
-                </p>
-                <div className="rounded-lg border border-border overflow-hidden">
-                  {demoCredentials.map((cred, idx) => (
-                    <div
-                      key={cred.id}
-                      className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/60 transition-colors group ${
-                        idx !== demoCredentials.length - 1 ? 'border-b border-border/50' : ''
-                      }`}
-                      onClick={() => handleCredentialClick(cred)}
-                    >
-                      <span className={`text-2xs font-mono-data font-semibold px-1.5 py-0.5 rounded flex-shrink-0 w-28 text-center ${cred.badgeClass}`}>
-                        {cred.role}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-foreground truncate">{cred.email}</p>
-                        <p className="text-2xs text-muted-foreground truncate">{cred.description}</p>
+                    {/* Full Name */}
+                    <div>
+                      <label htmlFor="signup-fullname" className="block text-xs font-semibold mb-2 tracking-widest uppercase" style={{ color: '#60A5FA' }}>
+                        Full Name
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#64748B' }}>
+                          <User size={17} />
+                        </span>
+                        <input
+                          id="signup-fullname" type="text" autoComplete="name"
+                          placeholder="e.g. Emeka Nwosu" value={signupFullName}
+                          onChange={(e) => { setSignupFullName(e.target.value); setSignupError(''); }}
+                          className={`${inputBase} pl-10 pr-4`} style={inputStyle}
+                          onFocus={onFocus} onBlur={onBlur} disabled={isSigningUp}
+                        />
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    </div>
+
+                    {/* Email */}
+                    <div>
+                      <label htmlFor="signup-email" className="block text-xs font-semibold mb-2 tracking-widest uppercase" style={{ color: '#60A5FA' }}>
+                        Email Address
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#64748B' }}>
+                          <User size={17} />
+                        </span>
+                        <input
+                          id="signup-email" type="email" autoComplete="email"
+                          placeholder="you@organisation.com" value={signupEmail}
+                          onChange={(e) => { setSignupEmail(e.target.value); setSignupError(''); }}
+                          className={`${inputBase} pl-10 pr-4`} style={inputStyle}
+                          onFocus={onFocus} onBlur={onBlur} disabled={isSigningUp}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Role selector */}
+                    <div>
+                      <label className="block text-xs font-semibold mb-2 tracking-widest uppercase" style={{ color: '#60A5FA' }}>
+                        Role
+                      </label>
+                      <div className="grid grid-cols-1 gap-2">
+                        {SIGNUP_ROLES.map((r) => (
+                          <button
+                            key={r.value}
+                            type="button"
+                            onClick={() => setSignupRole(r.value)}
+                            disabled={isSigningUp}
+                            className="w-full text-left rounded-lg px-4 py-3 transition-all duration-150 focus:outline-none"
+                            style={{
+                              backgroundColor: signupRole === r.value ? 'rgba(37,99,235,0.15)' : '#0B1120',
+                              border: signupRole === r.value ? '1px solid #3B82F6' : '1px solid #1E293B',
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-semibold" style={{ color: signupRole === r.value ? '#60A5FA' : '#CBD5E1' }}>
+                                {r.label}
+                              </span>
+                              {signupRole === r.value && (
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#3B82F6' }} />
+                              )}
+                            </div>
+                            <p className="text-xs mt-0.5" style={{ color: '#64748B' }}>{r.desc}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Team selector */}
+                    <div>
+                      <label htmlFor="signup-team" className="block text-xs font-semibold mb-2 tracking-widest uppercase" style={{ color: '#60A5FA' }}>
+                        Team Assignment
+                      </label>
+                      {teamsLoading ? (
+                        <div className="flex items-center gap-2 py-3 px-4 rounded-lg" style={{ backgroundColor: '#0B1120', border: '1px solid #1E293B' }}>
+                          <Loader2 size={14} className="animate-spin" style={{ color: '#64748B' }} />
+                          <span className="text-sm" style={{ color: '#64748B' }}>Loading teams…</span>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <select
+                            id="signup-team"
+                            value={signupTeamId}
+                            onChange={(e) => setSignupTeamId(e.target.value)}
+                            disabled={isSigningUp || teams.length === 0}
+                            className="w-full rounded-lg px-4 py-3 text-sm text-white outline-none transition-all duration-200 appearance-none pr-10"
+                            style={{ ...inputStyle, cursor: 'pointer' }}
+                            onFocus={onFocus}
+                            onBlur={onBlur}
+                          >
+                            {teams.length === 0 && <option value="">No teams available</option>}
+                            {teams.map((t) => (
+                              <option key={t.id} value={t.id} style={{ backgroundColor: '#111827' }}>
+                                {t.name}
+                              </option>
+                            ))}
+                          </select>
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#64748B' }}>
+                            <ChevronDown size={16} />
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Password */}
+                    <div>
+                      <label htmlFor="signup-password" className="block text-xs font-semibold mb-2 tracking-widest uppercase" style={{ color: '#60A5FA' }}>
+                        Password
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#64748B' }}>
+                          <Lock size={17} />
+                        </span>
+                        <input
+                          id="signup-password" type={showSignupPassword ? 'text' : 'password'}
+                          autoComplete="new-password" placeholder="Min. 8 characters"
+                          value={signupPassword}
+                          onChange={(e) => { setSignupPassword(e.target.value); setSignupError(''); }}
+                          className={`${inputBase} pl-10 pr-11`} style={inputStyle}
+                          onFocus={onFocus} onBlur={onBlur} disabled={isSigningUp}
+                        />
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleCopy(cred.email, `${cred.id}-email`); }}
-                          title="Copy email"
-                          className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
+                          type="button" aria-label={showSignupPassword ? 'Hide password' : 'Show password'}
+                          onClick={() => setShowSignupPassword((v) => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 focus:outline-none rounded"
+                          style={{ color: '#64748B' }}
                         >
-                          {copiedField === `${cred.id}-email` ? <CheckCircle size={11} className="text-status-low" /> : <Copy size={11} />}
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleCopy(cred.password, `${cred.id}-pw`); }}
-                          title="Copy password"
-                          className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
-                        >
-                          {copiedField === `${cred.id}-pw` ? <CheckCircle size={11} className="text-status-low" /> : <Lock size={11} />}
+                          {showSignupPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                         </button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* ─── SIGNUP FORM ─── */}
-          {step === 'credentials' && mode === 'signup' && (
-            <div className="space-y-5 fade-in">
-              <div>
-                <h2 className="text-xl font-bold text-foreground">Request Platform Access</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Access requests are reviewed by your organisation's administrator within 24 hours.
-                </p>
-              </div>
+                    {/* Confirm Password */}
+                    <div>
+                      <label htmlFor="signup-confirm" className="block text-xs font-semibold mb-2 tracking-widest uppercase" style={{ color: '#60A5FA' }}>
+                        Confirm Password
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#64748B' }}>
+                          <Lock size={17} />
+                        </span>
+                        <input
+                          id="signup-confirm" type="password" autoComplete="new-password"
+                          placeholder="Re-enter password" value={signupConfirm}
+                          onChange={(e) => { setSignupConfirm(e.target.value); setSignupError(''); }}
+                          className={`${inputBase} pl-10 pr-4`} style={inputStyle}
+                          onFocus={onFocus} onBlur={onBlur} disabled={isSigningUp}
+                        />
+                      </div>
+                    </div>
 
-              <form onSubmit={handleSignupSubmit} className="space-y-4">
-                {/* Full name */}
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">
-                    Full Name <span className="text-status-critical">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Adaeze Okonkwo"
-                    {...signupForm.register('fullName', {
-                      required: 'Full name is required',
-                      minLength: { value: 2, message: 'Name must be at least 2 characters' },
-                    })}
-                    className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary/50 transition-all"
-                  />
-                  {signupForm.formState.errors.fullName && (
-                    <p className="text-xs text-status-critical mt-1.5 flex items-center gap-1">
-                      <AlertTriangle size={11} />
-                      {signupForm.formState.errors.fullName.message}
-                    </p>
-                  )}
-                </div>
+                    {signupError && (
+                      <p className="text-xs text-center" style={{ color: '#F87171' }} role="alert">{signupError}</p>
+                    )}
 
-                {/* Work email */}
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">
-                    Work Email Address <span className="text-status-critical">*</span>
-                  </label>
-                  <p className="text-2xs text-muted-foreground mb-1.5">Must match your organisation's email domain</p>
-                  <div className="relative">
-                    <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="email"
-                      placeholder="you@yourorg.ng"
-                      {...signupForm.register('email', {
-                        required: 'Work email is required',
-                        pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Enter a valid email address' },
-                      })}
-                      className="w-full bg-input border border-border rounded-md pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary/50 transition-all"
-                    />
-                  </div>
-                  {signupForm.formState.errors.email && (
-                    <p className="text-xs text-status-critical mt-1.5 flex items-center gap-1">
-                      <AlertTriangle size={11} />
-                      {signupForm.formState.errors.email.message}
-                    </p>
-                  )}
-                </div>
-
-                {/* Organisation */}
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">
-                    Organisation Name <span className="text-status-critical">*</span>
-                  </label>
-                  <div className="relative">
-                    <Building2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="text"
-                      placeholder="First Bank of Nigeria Ltd"
-                      {...signupForm.register('organisation', {
-                        required: 'Organisation name is required',
-                      })}
-                      className="w-full bg-input border border-border rounded-md pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary/50 transition-all"
-                    />
-                  </div>
-                  {signupForm.formState.errors.organisation && (
-                    <p className="text-xs text-status-critical mt-1.5 flex items-center gap-1">
-                      <AlertTriangle size={11} />
-                      {signupForm.formState.errors.organisation.message}
-                    </p>
-                  )}
-                </div>
-
-                {/* Requested role */}
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">
-                    Requested Role <span className="text-status-critical">*</span>
-                  </label>
-                  <p className="text-2xs text-muted-foreground mb-1.5">Final role is assigned by your administrator</p>
-                  <select
-                    {...signupForm.register('role', { required: 'Please select a role' })}
-                    className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="ANALYST">Security Analyst — Read-only access</option>
-                    <option value="COMPLIANCE_ANALYST">Compliance Analyst — Compliance evidence access</option>
-                    <option value="RISK_OFFICER">Risk Officer — Full vendor management access</option>
-                    <option value="VIEWER">Executive Viewer — Dashboard access only</option>
-                  </select>
-                </div>
-
-                {/* Password */}
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">
-                    Password <span className="text-status-critical">*</span>
-                  </label>
-                  <p className="text-2xs text-muted-foreground mb-1.5">Minimum 12 characters with uppercase, number, and symbol — NIST SP 800-63B</p>
-                  <div className="relative">
-                    <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="Min. 12 characters"
-                      {...signupForm.register('password', {
-                        required: 'Password is required',
-                        minLength: { value: 12, message: 'Minimum 12 characters required (PCI DSS policy)' },
-                        pattern: {
-                          value: /^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9])/,
-                          message: 'Must contain uppercase, number, and special character',
-                        },
-                      })}
-                      className="w-full bg-input border border-border rounded-md pl-9 pr-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary/50 transition-all"
-                    />
                     <button
-                      type="button"
-                      onClick={() => setShowPassword((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      type="submit" disabled={isSigningUp}
+                      className="w-full rounded-lg py-3 font-semibold text-white text-sm transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
+                      style={{ backgroundColor: isSigningUp ? '#1e3a6e' : '#2563EB', opacity: isSigningUp ? 0.7 : 1, cursor: isSigningUp ? 'not-allowed' : 'pointer' }}
+                      onMouseEnter={(e) => { if (!isSigningUp) e.currentTarget.style.backgroundColor = '#1D4ED8'; }}
+                      onMouseLeave={(e) => { if (!isSigningUp) e.currentTarget.style.backgroundColor = '#2563EB'; }}
                     >
-                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                      {isSigningUp ? (<><Loader2 size={16} className="animate-spin" />Creating account…</>) : (
+                        <><UserPlus size={16} />Create Account</>
+                      )}
                     </button>
-                  </div>
-                  {signupForm.formState.errors.password && (
-                    <p className="text-xs text-status-critical mt-1.5 flex items-center gap-1">
-                      <AlertTriangle size={11} />
-                      {signupForm.formState.errors.password.message}
-                    </p>
-                  )}
-                </div>
 
-                {/* Confirm password */}
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">
-                    Confirm Password <span className="text-status-critical">*</span>
-                  </label>
-                  <div className="relative">
-                    <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      placeholder="Repeat your password"
-                      {...signupForm.register('confirmPassword', {
-                        required: 'Please confirm your password',
-                      })}
-                      className="w-full bg-input border border-border rounded-md pl-9 pr-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary/50 transition-all"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {showConfirmPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                  </div>
-                  {signupForm.formState.errors.confirmPassword && (
-                    <p className="text-xs text-status-critical mt-1.5 flex items-center gap-1">
-                      <AlertTriangle size={11} />
-                      {signupForm.formState.errors.confirmPassword.message}
-                    </p>
-                  )}
-                </div>
-
-                {/* Terms */}
-                <div className="flex items-start gap-2.5">
-                  <input
-                    id="agreeTerms"
-                    type="checkbox"
-                    {...signupForm.register('agreeTerms', {
-                      required: 'You must accept the terms to continue',
-                    })}
-                    className="w-3.5 h-3.5 mt-0.5 rounded border-border bg-input accent-primary flex-shrink-0"
-                  />
-                  <label htmlFor="agreeTerms" className="text-xs text-muted-foreground cursor-pointer leading-relaxed">
-                    I agree to the{' '}
-                    <button type="button" className="text-primary hover:underline">Terms of Service</button>
-                    {' '}and{' '}
-                    <button type="button" className="text-primary hover:underline">Privacy Policy</button>.
-                    I understand that all access is subject to RBAC controls and my activity is logged per{' '}
-                    <span className="text-foreground font-medium">PCI DSS Req 10</span>.
-                  </label>
-                </div>
-                {signupForm.formState.errors.agreeTerms && (
-                  <p className="text-xs text-status-critical flex items-center gap-1">
-                    <AlertTriangle size={11} />
-                    {signupForm.formState.errors.agreeTerms.message}
-                  </p>
+                    <div className="pt-4" style={{ borderTop: '1px solid #1E293B' }}>
+                      <p className="text-xs text-center leading-relaxed" style={{ color: '#3B82F6' }}>
+                        New accounts are subject to admin approval. Role and team assignments
+                        are stored in Supabase and govern your dashboard access.
+                      </p>
+                    </div>
+                  </form>
                 )}
+              </>
+            )}
 
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150 active:scale-[0.99]"
-                  style={{ minHeight: '42px' }}
-                >
-                  {isLoading ? (
-                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                  ) : (
-                    <>
-                      Submit Access Request
-                      <ArrowRight size={15} />
-                    </>
-                  )}
-                </button>
-              </form>
-
-              {/* MFA notice */}
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 border border-border">
-                <Smartphone size={13} className="text-primary flex-shrink-0 mt-0.5" />
-                <p className="text-2xs text-muted-foreground leading-relaxed">
-                  Upon account activation, you will be required to enrol a TOTP authenticator app.
-                  MFA is mandatory for all platform users per{' '}
-                  <span className="text-foreground font-medium">PCI DSS Req 8.4</span>.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Footer */}
-          <div className="mt-8 pt-6 border-t border-border">
-            <p className="text-2xs text-muted-foreground text-center">
-              SC-TPCRS v1.0 · MIVA Open University MIT Professional Master's Project ·{' '}
-              <span className="font-mono-data">Build 2026.07.17</span>
-            </p>
           </div>
         </div>
+
+        {/* Footer */}
+        <p className="mt-6 text-xs text-center" style={{ color: '#334155' }}>
+          SC-TPCRS v2.0 · Nigerian Fintech Ecosystem · Confidential
+        </p>
       </div>
     </div>
   );

@@ -21,13 +21,6 @@ const nextConfig = {
       dev: dev
     }
   ) {
-    config.module.rules.push({
-      test: /\.(jsx|tsx)$/,
-      exclude: [/node_modules/],
-      use: [{
-        loader: '@dhiwise/component-tagger/nextLoader',
-      }],
-    });
     if (dev) {
       const ignoredPaths = (process.env.WATCH_IGNORED_PATHS || '')
         .split(',')
@@ -39,6 +32,24 @@ const nextConfig = {
           : undefined,
       };
     }
+
+    // Increase chunk load timeout to prevent ChunkLoadError on slow networks
+    if (config.output) {
+      config.output.chunkLoadTimeout = 120000;
+    } else {
+      config.output = { chunkLoadTimeout: 120000 };
+    }
+
+    if (dev) {
+      config.module.rules.push({
+        test: /\.(jsx|tsx)$/,
+        exclude: [/node_modules/],
+        use: [{
+          loader: '@dhiwise/component-tagger/nextLoader',
+        }],
+      });
+    }
+
     return config;
   },
 };

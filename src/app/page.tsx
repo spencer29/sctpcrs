@@ -1,13 +1,37 @@
 import React from 'react';
+import dynamic from 'next/dynamic';
 import AppLayout from '@/components/AppLayout';
 import KevAlertBanner from './components/KevAlertBanner';
-import MetricsBentoGrid from './components/MetricsBentoGrid';
-import VrsTrendChart from './components/VrsTrendChart';
-import RiskTierRadial from './components/RiskTierRadial';
-import ComplianceFrameworkBar from './components/ComplianceFrameworkBar';
-import AlertFeedPanel from './components/AlertFeedPanel';
-import TopRiskVendorsTable from './components/TopRiskVendorsTable';
-import ActivityFeed from './components/ActivityFeed';
+import ChunkErrorBoundary from '@/components/ChunkErrorBoundary';
+import { PermissionGate } from '@/components/rbac/PermissionGate';
+
+// Skeleton placeholder for dynamic components
+const ComponentSkeleton = ({ height = 'h-48' }: { height?: string }) => (
+  <div className={`${height} w-full rounded-xl bg-muted/40 border border-border animate-pulse`} />
+);
+
+// Dynamically import heavy components to split into separate chunks
+const MetricsBentoGrid = dynamic(() => import('./components/MetricsBentoGrid'), {
+  loading: () => <ComponentSkeleton height="h-36" />,
+});
+const VrsTrendChart = dynamic(() => import('./components/VrsTrendChart'), {
+  loading: () => <ComponentSkeleton height="h-64" />,
+});
+const RiskTierRadial = dynamic(() => import('./components/RiskTierRadial'), {
+  loading: () => <ComponentSkeleton height="h-64" />,
+});
+const ComplianceFrameworkBar = dynamic(() => import('./components/ComplianceFrameworkBar'), {
+  loading: () => <ComponentSkeleton />,
+});
+const AlertFeedPanel = dynamic(() => import('./components/AlertFeedPanel'), {
+  loading: () => <ComponentSkeleton />,
+});
+const TopRiskVendorsTable = dynamic(() => import('./components/TopRiskVendorsTable'), {
+  loading: () => <ComponentSkeleton height="h-56" />,
+});
+const ActivityFeed = dynamic(() => import('./components/ActivityFeed'), {
+  loading: () => <ComponentSkeleton height="h-56" />,
+});
 
 export default function RiskOverviewDashboardPage() {
   return (
@@ -27,9 +51,12 @@ export default function RiskOverviewDashboardPage() {
               <span>Period:</span>
               <span className="text-foreground font-medium">Last 30 days</span>
             </div>
-            <button className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all duration-150 active:scale-95">
-              Export Report
-            </button>
+            {/* Only roles with dashboards:export can export the report */}
+            <PermissionGate resource="dashboards" action="export" silent>
+              <button className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all duration-150 active:scale-95">
+                Export Report
+              </button>
+            </PermissionGate>
           </div>
         </div>
 
@@ -37,31 +64,45 @@ export default function RiskOverviewDashboardPage() {
         <KevAlertBanner />
 
         {/* KPI Bento Grid */}
-        <MetricsBentoGrid />
+        <ChunkErrorBoundary>
+          <MetricsBentoGrid />
+        </ChunkErrorBoundary>
 
         {/* Charts row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-3 gap-5">
           <div className="lg:col-span-2">
-            <VrsTrendChart />
+            <ChunkErrorBoundary>
+              <VrsTrendChart />
+            </ChunkErrorBoundary>
           </div>
           <div className="lg:col-span-1">
-            <RiskTierRadial />
+            <ChunkErrorBoundary>
+              <RiskTierRadial />
+            </ChunkErrorBoundary>
           </div>
         </div>
 
         {/* Compliance + Alerts row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-2 gap-5">
-          <ComplianceFrameworkBar />
-          <AlertFeedPanel />
+          <ChunkErrorBoundary>
+            <ComplianceFrameworkBar />
+          </ChunkErrorBoundary>
+          <ChunkErrorBoundary>
+            <AlertFeedPanel />
+          </ChunkErrorBoundary>
         </div>
 
         {/* Bottom row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-3 gap-5">
           <div className="lg:col-span-2">
-            <TopRiskVendorsTable />
+            <ChunkErrorBoundary>
+              <TopRiskVendorsTable />
+            </ChunkErrorBoundary>
           </div>
           <div className="lg:col-span-1">
-            <ActivityFeed />
+            <ChunkErrorBoundary>
+              <ActivityFeed />
+            </ChunkErrorBoundary>
           </div>
         </div>
       </div>

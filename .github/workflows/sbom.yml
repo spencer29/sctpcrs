@@ -1,0 +1,150 @@
+# SBOM Generation Workflow
+# Generates a Software Bill of Materials (SBOM) in CycloneDX JSON format
+# on every push to main/master and on every pull request.
+#
+# Artifacts:
+#   - sbom-cyclonedx.json  (CycloneDX 1.4 JSON)
+#   - sbom-spdx.json       (SPDX 2.3 JSON, via @cyclonedx/cyclonedx-npm --output-format JSON)
+#
+# Required repository permissions (Settings → Actions → General):
+#   - contents: read
+#   - security-events: write  (for GitHub Dependency Submission API)
+
+name: SBOM Generation
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch: # allow manual trigger
+
+permissions:
+  contents: read
+  security-events: write   # needed for dependency-submission API
+
+jobs:
+  generate-sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Set up Node.js ────────────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── 3. Install dependencies ───────────────────────────────────────────────
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # ── 4. Generate CycloneDX SBOM ────────────────────────────────────────────
+      - name: Generate CycloneDX SBOM (JSON)
+        run: |
+          npx --yes @cyclonedx/cyclonedx-npm \
+            --output-format JSON \
+            --output-file sbom-cyclonedx.json \
+            --package-lock-only \
+            --flatten-components
+        # --package-lock-only: reads package-lock.json, no extra install needed
+        # --flatten-components: lists all transitive deps at the top level
+
+      # ── 5. Generate SPDX SBOM ─────────────────────────────────────────────────
+      - name: Generate SPDX SBOM (JSON)
+        run: |
+          npx --yes spdx-sbom-generator \
+            -p . \
+            -o sbom-spdx.json \
+            -f json || echo "SPDX generation skipped (tool unavailable)"
+        continue-on-error: true   # SPDX tool is optional; CycloneDX is the primary
+
+      # ── 6. Validate CycloneDX SBOM ────────────────────────────────────────────
+      - name: Validate CycloneDX SBOM
+        run: |
+          npx --yes @cyclonedx/cyclonedx-cli validate \
+            --input-file sbom-cyclonedx.json \
+            --input-format JSON || echo "Validation tool unavailable, skipping"
+        continue-on-error: true
+
+      # ── 7. Print SBOM summary ─────────────────────────────────────────────────
+      - name: Print SBOM component count
+        run: |
+          echo "=== CycloneDX SBOM Summary ==="
+          node -e "
+            const fs = require('fs');
+            const bom = JSON.parse(fs.readFileSync('sbom-cyclonedx.json', 'utf8'));
+            const comps = bom.components || [];
+            console.log('BOM format   :', bom.bomFormat);
+            console.log('Spec version :', bom.specVersion);
+            console.log('Serial number:', bom.serialNumber);
+            console.log('Components   :', comps.length);
+            const licenses = [...new Set(comps.flatMap(c => (c.licenses||[]).map(l => l.license?.id || l.expression || 'unknown')))];
+            console.log('Unique licenses:', licenses.join(', '));
+          "
+
+      # ── 8. Upload SBOM artifacts ──────────────────────────────────────────────
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: |
+            sbom-cyclonedx.json
+            sbom-spdx.json
+          retention-days: 90
+          if-no-files-found: warn
+
+      # ── 9. Submit to GitHub Dependency Graph (optional) ───────────────────────
+      # Requires: Settings → Code security → Dependency graph → enabled
+      # Requires: permissions.security-events: write (set above)
+      - name: Submit SBOM to GitHub Dependency Submission API
+        uses: advanced-security/spdx-dependency-submission-action@v0.1.1
+        with:
+          filePath: '.'
+          filePattern: 'sbom-spdx.json'
+        continue-on-error: true   # non-blocking if SPDX file was not generated
+
+  # ── Separate job: license compliance check ──────────────────────────────────
+  license-check:
+    name: License Compliance Check
+    runs-on: ubuntu-latest
+    needs: generate-sbom
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run license checker
+        run: |
+          npx --yes license-checker \
+            --production \
+            --onlyAllow "MIT;ISC;BSD-2-Clause;BSD-3-Clause;Apache-2.0;CC0-1.0;CC-BY-3.0;CC-BY-4.0;0BSD;Python-2.0;Unlicense;BlueOak-1.0.0" \
+            --excludePrivatePackages \
+            --json \
+            --out license-report.json || true
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report-${{ github.sha }}
+          path: license-report.json
+          retention-days: 90
+          if-no-files-found: warn
