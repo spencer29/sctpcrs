@@ -5,11 +5,12 @@ import AppLayout from '@/components/AppLayout';
 import FrameworkStatusGrid from './components/FrameworkStatusGrid';
 import AuditSchedulePanel from './components/AuditSchedulePanel';
 import RemediationTracker from './components/RemediationTracker';
+import VendorAssessmentFindingsModal from './components/VendorAssessmentFindingsModal';
 import { useRoleFilter } from '@/lib/rbac/useRoleFilter';
 import { PermissionGate } from '@/components/rbac/PermissionGate';
 import { createClient } from '@/lib/supabase/client';
 
-import { ShieldCheck, AlertTriangle, TrendingUp, BarChart3, Calendar, Wrench, ChevronRight, Plus } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, TrendingUp, BarChart3, Calendar, Wrench, ChevronRight, Plus, ClipboardCheck } from 'lucide-react';
 import { RadialBarChart, RadialBar, ResponsiveContainer, Tooltip } from 'recharts';
 
 type ActiveTab = 'matrix' | 'audits' | 'remediation';
@@ -54,6 +55,7 @@ interface FrameworkScore {
 export default function CompliancePage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('matrix');
   const [selectedFramework, setSelectedFramework] = useState<string | null>(null);
+  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [kpis, setKpis] = useState<ComplianceKpis>({
     overallScore: 69,
     totalVendors: 12,
@@ -169,6 +171,16 @@ export default function CompliancePage() {
                 <span className="text-xs font-semibold text-status-high">{kpis.criticalRemediations} Critical Remediations</span>
               </div>
             )}
+            {/* Gate Vendor Assessment button behind assess_vendor permission */}
+            <PermissionGate resource="vendors" action="assess_vendor" silent>
+              <button
+                onClick={() => setShowAssessmentModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-muted border border-border text-xs font-semibold text-foreground hover:bg-secondary transition-all duration-150 active:scale-95"
+              >
+                <ClipboardCheck size={13} />
+                Vendor Assessment
+              </button>
+            </PermissionGate>
             {/* Gate Schedule Audit button behind compliance:schedule_audit permission */}
             <PermissionGate resource="compliance" action="schedule_audit" silent>
               <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all duration-150 active:scale-95">
@@ -338,6 +350,17 @@ export default function CompliancePage() {
           )}
         </div>
       </div>
+
+      {/* Vendor Assessment Findings Modal */}
+      {showAssessmentModal && (
+        <VendorAssessmentFindingsModal
+          onClose={() => setShowAssessmentModal(false)}
+          onSubmit={(data) => {
+            console.info('Assessment findings submitted:', data.vendorName, data.riskLevel);
+            setShowAssessmentModal(false);
+          }}
+        />
+      )}
     </AppLayout>
   );
 }
