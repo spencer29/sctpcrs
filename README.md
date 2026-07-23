@@ -82,6 +82,25 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out the [Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## 🔒 Security & SBOM
+
+This project generates a **Software Bill of Materials (SBOM)** on every CI run.
+
+| Resource | Location |
+|---|---|
+| SBOM requirements & usage guide | [`docs/sbom-requirements.md`](docs/sbom-requirements.md) |
+| CI/CD pipeline (lint + build + SBOM) | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
+| Standalone SBOM workflow | [`.github/workflows/sbom.yml`](.github/workflows/sbom.yml) |
+
+**Formats generated**: CycloneDX 1.4 JSON (primary) · SPDX 2.3 JSON (secondary)  
+**Tooling**: `@cyclonedx/cyclonedx-npm` · `spdx-sbom-generator` · `license-checker`  
+**Artifacts**: Stored as GitHub Actions artifacts for 90 days per run.
+
+To generate an SBOM locally:
+```bash
+npx @cyclonedx/cyclonedx-npm --output-format JSON --output-file sbom-cyclonedx.json --package-lock-only
+```
+
 ## 🙏 Acknowledgments
 
 - Built with [Rocket.new](https://rocket.new)
