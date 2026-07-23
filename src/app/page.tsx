@@ -3,6 +3,7 @@ import dynamic from 'next/dynamic';
 import AppLayout from '@/components/AppLayout';
 import KevAlertBanner from './components/KevAlertBanner';
 import ChunkErrorBoundary from '@/components/ChunkErrorBoundary';
+import { PermissionGate } from '@/components/rbac/PermissionGate';
 
 // Skeleton placeholder for dynamic components
 const ComponentSkeleton = ({ height = 'h-48' }: { height?: string }) => (
@@ -50,9 +51,12 @@ export default function RiskOverviewDashboardPage() {
               <span>Period:</span>
               <span className="text-foreground font-medium">Last 30 days</span>
             </div>
-            <button className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all duration-150 active:scale-95">
-              Export Report
-            </button>
+            {/* Only roles with dashboards:export can export the report */}
+            <PermissionGate resource="dashboards" action="export" silent>
+              <button className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all duration-150 active:scale-95">
+                Export Report
+              </button>
+            </PermissionGate>
           </div>
         </div>
 

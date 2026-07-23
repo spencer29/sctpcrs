@@ -5,7 +5,15 @@ export type AppRole = 'admin' | 'risk_officer' | 'compliance_manager' | 'ciso' |
 export type ResourceType =
   | 'vendors'
   | 'incidents' |'alerts' |'dashboards' |'compliance' |'assessments' |'reports' |'supply_chain' |'monitoring' |'admin';
-export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'export' | 'escalate' | 'approve';
+export type PermissionAction =
+  | 'view' |'create' |'edit' |'delete' |'export' |'escalate' |'approve'
+  // Granular vendor actions
+  | 'assess_vendor'    // Trigger / initiate a vendor risk assessment
+  | 'suspend_vendor'   // Suspend / place a vendor under review
+  // Granular compliance actions
+  | 'modify_compliance' // Edit framework scores, remediation items, audit schedules
+  | 'close_remediation' // Mark a remediation item as resolved
+  | 'schedule_audit';   // Create or reschedule audit entries
 
 export interface RoleDefinition {
   id: AppRole;
@@ -68,13 +76,14 @@ export const ROLE_DEFINITIONS: Record<AppRole, RoleDefinition> = {
 };
 
 // Permission matrix: role → resource → allowed actions
+// Granular vendor/compliance actions are listed explicitly per role.
 export const PERMISSION_MATRIX: Record<AppRole, Partial<Record<ResourceType, PermissionAction[]>>> = {
   admin: {
-    vendors:      ['view', 'create', 'edit', 'delete', 'export'],
+    vendors:      ['view', 'create', 'edit', 'delete', 'export', 'assess_vendor', 'suspend_vendor'],
     incidents:    ['view', 'create', 'edit', 'delete', 'escalate', 'approve'],
     alerts:       ['view', 'create', 'edit', 'delete', 'escalate'],
-    dashboards:   ['view', 'create', 'edit', 'delete'],
-    compliance:   ['view', 'create', 'edit', 'delete', 'approve'],
+    dashboards:   ['view', 'create', 'edit', 'delete', 'export'],
+    compliance:   ['view', 'create', 'edit', 'delete', 'approve', 'modify_compliance', 'close_remediation', 'schedule_audit'],
     assessments:  ['view', 'create', 'edit', 'delete', 'approve'],
     reports:      ['view', 'create', 'export'],
     supply_chain: ['view', 'edit'],
@@ -82,11 +91,11 @@ export const PERMISSION_MATRIX: Record<AppRole, Partial<Record<ResourceType, Per
     admin:        ['view', 'create', 'edit', 'delete'],
   },
   ciso: {
-    vendors:      ['view', 'create', 'edit', 'delete', 'export'],
+    vendors:      ['view', 'create', 'edit', 'delete', 'export', 'assess_vendor', 'suspend_vendor'],
     incidents:    ['view', 'create', 'edit', 'delete', 'escalate', 'approve'],
     alerts:       ['view', 'create', 'edit', 'delete', 'escalate'],
-    dashboards:   ['view', 'create', 'edit', 'delete'],
-    compliance:   ['view', 'create', 'edit', 'delete', 'approve'],
+    dashboards:   ['view', 'create', 'edit', 'delete', 'export'],
+    compliance:   ['view', 'create', 'edit', 'delete', 'approve', 'modify_compliance', 'close_remediation', 'schedule_audit'],
     assessments:  ['view', 'create', 'edit', 'delete', 'approve'],
     reports:      ['view', 'create', 'export'],
     supply_chain: ['view', 'edit'],
@@ -94,11 +103,11 @@ export const PERMISSION_MATRIX: Record<AppRole, Partial<Record<ResourceType, Per
     admin:        [],
   },
   risk_officer: {
-    vendors:      ['view', 'create', 'edit', 'export'],
+    vendors:      ['view', 'create', 'edit', 'export', 'assess_vendor', 'suspend_vendor'],
     incidents:    ['view', 'create', 'edit', 'escalate', 'approve'],
     alerts:       ['view', 'create', 'edit', 'escalate'],
-    dashboards:   ['view', 'create', 'edit'],
-    compliance:   ['view', 'create', 'edit', 'approve'],
+    dashboards:   ['view', 'create', 'edit', 'export'],
+    compliance:   ['view', 'create', 'edit', 'approve', 'modify_compliance', 'close_remediation', 'schedule_audit'],
     assessments:  ['view', 'create', 'edit', 'approve'],
     reports:      ['view', 'create', 'export'],
     supply_chain: ['view'],
@@ -106,11 +115,12 @@ export const PERMISSION_MATRIX: Record<AppRole, Partial<Record<ResourceType, Per
     admin:        [],
   },
   compliance_manager: {
-    vendors:      ['view', 'create', 'edit', 'export'],
+    // Can view and assess vendors; cannot suspend (no risk authority)
+    vendors:      ['view', 'create', 'edit', 'export', 'assess_vendor'],
     incidents:    ['view', 'create', 'edit', 'escalate'],
     alerts:       ['view', 'create', 'edit'],
     dashboards:   ['view', 'create', 'edit'],
-    compliance:   ['view', 'create', 'edit', 'delete', 'approve'],
+    compliance:   ['view', 'create', 'edit', 'delete', 'approve', 'modify_compliance', 'close_remediation', 'schedule_audit'],
     assessments:  ['view', 'create', 'edit', 'approve'],
     reports:      ['view', 'create', 'export'],
     supply_chain: ['view'],
@@ -118,7 +128,8 @@ export const PERMISSION_MATRIX: Record<AppRole, Partial<Record<ResourceType, Per
     admin:        [],
   },
   analyst: {
-    vendors:      ['view', 'create', 'edit', 'export'],
+    // Can assess vendors but cannot suspend or modify compliance data
+    vendors:      ['view', 'create', 'edit', 'export', 'assess_vendor'],
     incidents:    ['view', 'create', 'edit', 'escalate'],
     alerts:       ['view', 'create', 'edit'],
     dashboards:   ['view'],
@@ -130,6 +141,7 @@ export const PERMISSION_MATRIX: Record<AppRole, Partial<Record<ResourceType, Per
     admin:        [],
   },
   viewer: {
+    // Read-only; no write, assess, suspend, or modify actions
     vendors:      ['view'],
     incidents:    ['view'],
     alerts:       ['view'],
@@ -199,3 +211,21 @@ export const ROLE_LABELS: Record<AppRole, string> = {
 };
 
 export const ALL_ROLES: AppRole[] = ['admin', 'ciso', 'risk_officer', 'compliance_manager', 'analyst', 'viewer'];
+
+/**
+ * Human-readable labels for granular permission actions (for UI tooltips / access-denied messages)
+ */
+export const PERMISSION_ACTION_LABELS: Record<PermissionAction, string> = {
+  view: 'view',
+  create: 'create',
+  edit: 'edit',
+  delete: 'delete',
+  export: 'export',
+  escalate: 'escalate',
+  approve: 'approve',
+  assess_vendor: 'assess vendors',
+  suspend_vendor: 'suspend vendors',
+  modify_compliance: 'modify compliance data',
+  close_remediation: 'close remediations',
+  schedule_audit: 'schedule audits',
+};

@@ -6,6 +6,7 @@ import FrameworkStatusGrid from './components/FrameworkStatusGrid';
 import AuditSchedulePanel from './components/AuditSchedulePanel';
 import RemediationTracker from './components/RemediationTracker';
 import { useRoleFilter } from '@/lib/rbac/useRoleFilter';
+import { PermissionGate } from '@/components/rbac/PermissionGate';
 import { createClient } from '@/lib/supabase/client';
 
 import { ShieldCheck, AlertTriangle, TrendingUp, BarChart3, Calendar, Wrench, ChevronRight, Plus } from 'lucide-react';
@@ -168,12 +169,13 @@ export default function CompliancePage() {
                 <span className="text-xs font-semibold text-status-high">{kpis.criticalRemediations} Critical Remediations</span>
               </div>
             )}
-            {roleFilter.canScheduleAudits && (
+            {/* Gate Schedule Audit button behind compliance:schedule_audit permission */}
+            <PermissionGate resource="compliance" action="schedule_audit" silent>
               <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all duration-150 active:scale-95">
                 <Plus size={13} />
                 Schedule Audit
               </button>
-            )}
+            </PermissionGate>
           </div>
         </div>
 
@@ -279,7 +281,7 @@ export default function CompliancePage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-all duration-150 -mb-px ${
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-all duration-150 border-b-2 -mb-px ${
                 activeTab === tab.id
                   ? 'border-primary text-primary' :'border-transparent text-muted-foreground hover:text-foreground'
               }`}
@@ -288,21 +290,53 @@ export default function CompliancePage() {
               {tab.label}
             </button>
           ))}
+          {/* Modify Compliance Data button — only for roles with modify_compliance */}
+          <div className="ml-auto pb-1">
+            <PermissionGate resource="compliance" action="modify_compliance" silent>
+              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-muted border border-border text-xs font-medium text-foreground hover:bg-secondary transition-all duration-150">
+                <TrendingUp size={12} />
+                Modify Compliance Data
+              </button>
+            </PermissionGate>
+          </div>
         </div>
 
         {/* Tab content */}
-        {activeTab === 'matrix' && (
-          <FrameworkStatusGrid
-            selectedFramework={selectedFramework}
-            onFrameworkSelect={(id) => setSelectedFramework(id === selectedFramework ? null : id)}
-          />
-        )}
-        {activeTab === 'audits' && (
-          <AuditSchedulePanel canSchedule={roleFilter.canScheduleAudits} />
-        )}
-        {activeTab === 'remediation' && (
-          <RemediationTracker canClose={roleFilter.canCloseRemediations} />
-        )}
+        <div>
+          {activeTab === 'matrix' && (
+            <PermissionGate resource="compliance" action="view" fallback={
+              <div className="flex flex-col items-center justify-center py-20 gap-3">
+                <ShieldCheck size={40} className="text-muted-foreground" />
+                <p className="text-sm font-medium text-foreground">Access Restricted</p>
+                <p className="text-xs text-muted-foreground">You do not have permission to view compliance data.</p>
+              </div>
+            }>
+              <FrameworkStatusGrid selectedFramework={selectedFramework} />
+            </PermissionGate>
+          )}
+          {activeTab === 'audits' && (
+            <PermissionGate resource="compliance" action="view" fallback={
+              <div className="flex flex-col items-center justify-center py-20 gap-3">
+                <ShieldCheck size={40} className="text-muted-foreground" />
+                <p className="text-sm font-medium text-foreground">Access Restricted</p>
+                <p className="text-xs text-muted-foreground">You do not have permission to view audit schedules.</p>
+              </div>
+            }>
+              <AuditSchedulePanel canSchedule={roleFilter.canScheduleAudit} />
+            </PermissionGate>
+          )}
+          {activeTab === 'remediation' && (
+            <PermissionGate resource="compliance" action="view" fallback={
+              <div className="flex flex-col items-center justify-center py-20 gap-3">
+                <ShieldCheck size={40} className="text-muted-foreground" />
+                <p className="text-sm font-medium text-foreground">Access Restricted</p>
+                <p className="text-xs text-muted-foreground">You do not have permission to view remediations.</p>
+              </div>
+            }>
+              <RemediationTracker canClose={roleFilter.canCloseRemediationItems} />
+            </PermissionGate>
+          )}
+        </div>
       </div>
     </AppLayout>
   );

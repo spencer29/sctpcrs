@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { ResourceType, PermissionAction } from '@/lib/rbac/permissions';
+import { ResourceType, PermissionAction, AppRole, PERMISSION_ACTION_LABELS } from '@/lib/rbac/permissions';
 import { ShieldOff } from 'lucide-react';
 
 interface PermissionGateProps {
@@ -17,7 +17,7 @@ interface PermissionGateProps {
 
 /**
  * Wraps any UI that requires a specific permission.
- * Usage: <PermissionGate resource="vendors" action="create">...</PermissionGate>
+ * Usage: <PermissionGate resource="vendors" action="assess_vendor">...</PermissionGate>
  */
 export function PermissionGate({
   resource,
@@ -33,16 +33,18 @@ export function PermissionGate({
   if (silent) return null;
   if (fallback) return <>{fallback}</>;
 
+  const actionLabel = PERMISSION_ACTION_LABELS[action] ?? action;
+
   return (
     <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/50 border border-border text-muted-foreground text-xs">
       <ShieldOff size={13} />
-      <span>You don&apos;t have permission to {action} {resource}.</span>
+      <span>You don&apos;t have permission to {actionLabel} {resource}.</span>
     </div>
   );
 }
 
 interface RoleGateProps {
-  roles: Array<'admin' | 'risk_officer' | 'analyst' | 'viewer'>;
+  roles: AppRole[];
   children: React.ReactNode;
   fallback?: React.ReactNode;
   silent?: boolean;
@@ -78,8 +80,21 @@ export function AdminOnly({ children, fallback }: AdminOnlyProps) {
 /** Shorthand: hide from viewers */
 export function NotViewer({ children, fallback }: AdminOnlyProps) {
   return (
-    <RoleGate roles={['admin', 'risk_officer', 'analyst']} fallback={fallback} silent={!fallback}>
+    <RoleGate roles={['admin', 'ciso', 'risk_officer', 'compliance_manager', 'analyst']} fallback={fallback} silent={!fallback}>
       {children}
     </RoleGate>
   );
+}
+
+/**
+ * Hook: returns true if the current user has the given permission.
+ * Useful for conditional logic outside JSX.
+ *
+ * @example
+ * const canSuspend = usePermission('vendors', 'suspend_vendor');
+ */
+export function usePermission(resource: ResourceType, action: PermissionAction): boolean {
+  const { can, loading } = useAuth();
+  if (loading) return false;
+  return can(resource, action);
 }

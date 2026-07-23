@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import VendorDetailModal from './VendorDetailModal';
 import VendorRiskWorkflowModal from './VendorRiskWorkflowModal';
 import { createClient } from '@/lib/supabase/client';
+import { usePermission } from '@/components/rbac/PermissionGate';
 
 interface VendorRow {
   id: string;
@@ -116,6 +117,11 @@ export default function VendorDataTable() {
   const [riskWorkflowVendor, setRiskWorkflowVendor] = useState<VendorRow | null>(null);
   const [vendorData, setVendorData] = useState<VendorRow[]>(STATIC_VENDORS);
   const [loading, setLoading] = useState(true);
+
+  // Granular permission checks
+  const canAssessVendor = usePermission('vendors', 'assess_vendor');
+  const canSuspendVendor = usePermission('vendors', 'suspend_vendor');
+  const canExportVendors = usePermission('vendors', 'export');
 
   const fetchVendors = useCallback(async () => {
     const supabase = createClient();
@@ -294,15 +300,21 @@ export default function VendorDataTable() {
         <div className="slide-up flex items-center gap-3 px-4 py-2.5 rounded-lg bg-primary/10 border border-primary/30 text-sm">
           <span className="text-primary font-semibold font-mono-data">{selected.size} selected</span>
           <div className="h-4 w-px bg-border" />
-          <button onClick={handleBulkAssess} className="flex items-center gap-1.5 text-xs text-foreground hover:text-primary transition-colors">
-            <Send size={13} /> Trigger Assessment
-          </button>
-          <button onClick={handleBulkSuspend} className="flex items-center gap-1.5 text-xs text-foreground hover:text-status-high transition-colors">
-            <PauseCircle size={13} /> Suspend
-          </button>
-          <button onClick={handleBulkExport} className="flex items-center gap-1.5 text-xs text-foreground hover:text-status-info transition-colors">
-            <Download size={13} /> Export
-          </button>
+          {canAssessVendor && (
+            <button onClick={handleBulkAssess} className="flex items-center gap-1.5 text-xs text-foreground hover:text-primary transition-colors">
+              <Send size={13} /> Trigger Assessment
+            </button>
+          )}
+          {canSuspendVendor && (
+            <button onClick={handleBulkSuspend} className="flex items-center gap-1.5 text-xs text-foreground hover:text-status-high transition-colors">
+              <PauseCircle size={13} /> Suspend
+            </button>
+          )}
+          {canExportVendors && (
+            <button onClick={handleBulkExport} className="flex items-center gap-1.5 text-xs text-foreground hover:text-status-info transition-colors">
+              <Download size={13} /> Export
+            </button>
+          )}
           <button onClick={() => setSelected(new Set())} className="ml-auto text-xs text-muted-foreground hover:text-foreground transition-colors">
             Clear selection
           </button>
@@ -427,12 +439,16 @@ export default function VendorDataTable() {
                         <button title="View vendor profile" className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-150" onClick={(e) => { e.stopPropagation(); router.push(`/vendor-management/${vendor.id}`); }}>
                           <Eye size={13} />
                         </button>
-                        <button title="Assess vendor risk" className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-status-high hover:bg-status-high/10 transition-all duration-150" onClick={(e) => { e.stopPropagation(); setRiskWorkflowVendor(vendor); }}>
-                          <FileSearch size={13} />
-                        </button>
-                        <button title="Suspend vendor" className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-status-high hover:bg-status-high/10 transition-all duration-150" onClick={() => toast.warning(`Suspension review started for ${vendor.legalName}`)}>
-                          <PauseCircle size={13} />
-                        </button>
+                        {canAssessVendor && (
+                          <button title="Assess vendor risk" className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-status-high hover:bg-status-high/10 transition-all duration-150" onClick={(e) => { e.stopPropagation(); setRiskWorkflowVendor(vendor); }}>
+                            <FileSearch size={13} />
+                          </button>
+                        )}
+                        {canSuspendVendor && (
+                          <button title="Suspend vendor" className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-status-high hover:bg-status-high/10 transition-all duration-150" onClick={(e) => { e.stopPropagation(); toast.warning(`Suspension review started for ${vendor.legalName}`); }}>
+                            <PauseCircle size={13} />
+                          </button>
+                        )}
                         <div className="relative">
                           <button title="More actions" onClick={() => setActionMenuOpen(actionMenuOpen === vendor.id ? null : vendor.id)} className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-150">
                             <MoreHorizontal size={13} />
@@ -440,12 +456,12 @@ export default function VendorDataTable() {
                           {actionMenuOpen === vendor.id && (
                             <div className="absolute right-0 top-full mt-1 w-44 bg-card border border-border rounded-lg shadow-xl z-20 py-1 fade-in">
                               {[
-                                { label: 'View Timeline', icon: <Eye size={12} /> },
-                                { label: 'Assess Vendor Risk', icon: <ShieldAlert size={12} />, action: () => { setRiskWorkflowVendor(vendor); setActionMenuOpen(null); } },
-                                { label: 'Upload Document', icon: <Download size={12} /> },
-                                { label: 'Trigger Re-Score', icon: <FileSearch size={12} /> },
-                                { label: 'Initiate Offboarding', icon: <PauseCircle size={12} />, danger: true },
-                              ].map((action) => (
+                                { label: 'View Timeline', icon: <Eye size={12} />, show: true },
+                                { label: 'Assess Vendor Risk', icon: <ShieldAlert size={12} />, show: canAssessVendor, action: () => { setRiskWorkflowVendor(vendor); setActionMenuOpen(null); } },
+                                { label: 'Upload Document', icon: <Download size={12} />, show: true },
+                                { label: 'Trigger Re-Score', icon: <FileSearch size={12} />, show: canAssessVendor },
+                                { label: 'Initiate Offboarding', icon: <PauseCircle size={12} />, show: canSuspendVendor, danger: true },
+                              ].filter((a) => a.show).map((action) => (
                                 <button key={`menu-${vendor.id}-${action.label}`} onClick={() => { if (action.action) { action.action(); } else { toast.success(`${action.label}: ${vendor.legalName}`); setActionMenuOpen(null); } }} className={`flex items-center gap-2 w-full px-3 py-2 text-xs transition-colors hover:bg-muted ${action.danger ? 'text-status-critical' : 'text-foreground'}`}>
                                   {action.icon}
                                   {action.label}

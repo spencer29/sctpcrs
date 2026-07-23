@@ -40,6 +40,21 @@ export interface RoleFilterConfig {
   canDeleteVendors: boolean;
   /** Whether the current user can access admin routes */
   canAccessAdmin: boolean;
+  // ── Granular vendor permissions ──────────────────────────────────────────
+  /** Whether the current user can initiate a vendor risk assessment */
+  canAssessVendor: boolean;
+  /** Whether the current user can suspend a vendor */
+  canSuspendVendor: boolean;
+  // ── Granular compliance permissions ──────────────────────────────────────
+  /** Whether the current user can modify compliance framework data */
+  canModifyCompliance: boolean;
+  /** Whether the current user can close/resolve remediation items */
+  canCloseRemediationItems: boolean;
+  /** Whether the current user can schedule audits */
+  canScheduleAudit: boolean;
+  // ── Dashboard permissions ─────────────────────────────────────────────────
+  /** Whether the current user can export dashboard reports */
+  canExportDashboard: boolean;
   /** Role label for display */
   roleLabel: string;
   /** Current role */
@@ -71,10 +86,21 @@ export function useRoleFilter(): RoleFilterConfig {
     canTriggerComplianceChecks: isRiskOfficer() || isAdmin(),
     canDeleteVendors: can('vendors', 'delete'),
     canAccessAdmin: can('admin', 'view'),
+    // Granular vendor permissions
+    canAssessVendor: can('vendors', 'assess_vendor'),
+    canSuspendVendor: can('vendors', 'suspend_vendor'),
+    // Granular compliance permissions
+    canModifyCompliance: can('compliance', 'modify_compliance'),
+    canCloseRemediationItems: can('compliance', 'close_remediation'),
+    canScheduleAudit: can('compliance', 'schedule_audit'),
+    // Dashboard
+    canExportDashboard: can('dashboards', 'export'),
     roleLabel: role
       ? role === 'risk_officer' ? 'Risk Officer'
         : role === 'analyst' ? (isAuditorPersona ? 'Auditor' : isVendorManagerPersona ? 'Vendor Manager' : 'Analyst')
-        : role === 'admin'? 'Admin' :'Viewer' :'Guest',
+        : role === 'admin' ? 'Admin'
+        : role === 'ciso' ? 'CISO'
+        : role === 'compliance_manager'? 'Compliance Manager' :'Viewer' :'Guest',
     role,
   };
 }
