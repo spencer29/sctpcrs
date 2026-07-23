@@ -24,6 +24,7 @@ import {
   HelpCircle,
   ClipboardList,
   Lock,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface NavItem {
@@ -96,6 +97,15 @@ const navItems: NavItem[] = [
     icon: <Activity size={18} />,
     badge: 7,
     badgeSeverity: 'medium',
+    group: 'core',
+  },
+  {
+    id: 'nav-security-events',
+    label: 'Security Events',
+    href: '/security-events',
+    icon: <ShieldAlert size={18} />,
+    badge: 3,
+    badgeSeverity: 'critical',
     group: 'core',
   },
   {
